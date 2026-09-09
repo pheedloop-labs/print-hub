@@ -220,6 +220,39 @@ started, and it answers with the old code.
     `140x88mm`, measuring 89.0 x 142.2 mm. Nothing near 139.7 x 88.9 mm
     exists. Custom forms are not a credible path: the driver claims a
     156.1 mm minimum length while its own only form is 142.2 mm long.
+17. **Cross-config replay of the vendor bytes works, in both directions.**
+    The operator set `Zoom-in/out[Z]` to 105 by hand. That moved exactly
+    four driver-private bytes and nothing else of substance:
+
+    | offset | 100% | 105% |
+    |---|---|---|
+    | private+644 | `0x64` = 100 | `0x69` = 105 |
+    | private+668 | `0x00` | `0x01` |
+    | private+672 | `0x64` = 100 | `0x00` |
+    | private+684 | `0x1e` = 30 | `0x00` |
+
+    Applying the 100% blob while the queue sat at 105% moved it to 100%, and
+    applying 105% moved it back. This is the proof the task wanted: a
+    vendor-only setting, reachable by no portable API, captured and replayed.
+
+    Beware a red herring in that diff. Bytes 18 to 60 of the **public**
+    section also differ, but they are residue after the NUL terminator inside
+    the fixed 32-wchar `dmDeviceName` field, left from a longer string. Both
+    blobs still name `HUB-CARD`. Do not read them as a settings change.
+18. **A driver UI setting can silently change effective scale, and the zoom
+    setting is the one to watch.** At 105% the driver reports
+    `LOGPIXELSX` 315 instead of 300 and `HORZRES` 1764 instead of 1680, both
+    exactly 1.05x, while `HORZSIZE` still claims the same 142 mm. Those two
+    claims cannot both be true. Either the dpi is honest, in which case
+    rendering at the reported dpi cancels the zoom and a 140 mm page still
+    prints at 140 mm, or the hardware is really 300 dpi and the same page
+    prints at 146.98 mm, a 5% enlargement.
+
+    Device caps cannot settle it. Only a card can. Until it is settled,
+    assume the queue's DEVMODE can defeat the renderer's exact-scale
+    guarantee without any error anywhere, which is the strongest argument
+    for the agent asserting a known-good blob before every job rather than
+    trusting whatever the queue happens to hold.
 
 ## Closed task 1 — the card print failed because of the renderer
 
@@ -330,12 +363,25 @@ Acceptance for this task:
    silently substitutes its own and prints normally. There is no failure
    signature to put in front of the team.
 
-What remains, and it needs a second genuinely valid configuration: prove
-that applying config A's private bytes while the queue sits at config B
-actually moves the queue to A. Single-byte flips prove the region is
-writable, but only the driver UI can produce a second blob that passes the
-driver's own validation. Change one vendor setting by hand, capture, then
-`devmode.py diff` the two blobs and apply each in turn.
+Cross-config replay is now **proven**, using `Zoom-in/out[Z]` at 100 and 105
+as the two configurations. See Verified item 17. The mechanism is done.
+
+What remains is not about DEVMODE at all. It is the scale question in
+Verified item 18: does a 105% zoom actually enlarge the printed card, or
+does rendering at the driver's own reported dpi cancel it out? One card
+settles it, and the answer decides whether the agent merely *can* assert a
+known-good blob or **must**.
+
+Restore points live in `devmode\`, gitignored:
+
+| file | contents |
+|---|---|
+| `HUB-CARD.restore.devmode` | zoom 100, the known-good config. Prints correctly |
+| `HUB-CARD.zoom105.devmode` | zoom 105, kept as the second config for replay tests |
+| `HUB-PDF.restore.devmode` | the `HUB-PDF` default |
+
+The queue is currently left at the zoom 100 blob. Put it back there after
+any experiment, because 105% may misprint every card.
 
 ## Open task 3 — Session 0 service test (spike 1, gating)
 
