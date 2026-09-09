@@ -28,7 +28,7 @@ Windows 11, development workstation. User profile `pheed`. Project root
 | venv | `C:\hub\.venv` |
 | venv python | `C:\hub\.venv\Scripts\python.exe` |
 | Renderer | `C:\hub\SumatraPDF.exe` plus its DLLs, portable |
-| Packages | flask, waitress, pywin32, pypdf, qrcode, reportlab |
+| Packages | flask, waitress, pywin32, pypdf, qrcode, reportlab, pypdfium2 |
 
 `pywin32_postinstall.py -install` has been run as admin. If `import
 win32print` fails, run it again from an admin shell.
@@ -47,26 +47,49 @@ no dialog. Use it for every test that does not need real media.
 
 ## The media
 
-The ZC10L holds 5.5 x 3.5 inch badge stock. That is **139.7 x 88.9 mm**.
+The stock is **3.5 inch wide by 5.5 inch high**, portrait. That is
+88.9 x 139.7 mm. The operator confirmed the orientation by hand.
 
-The spike artifact says 5.5 x 3.46 in. The artifact is wrong. Trust the
-number here.
+Author every test page at **140.0 x 88.0 mm landscape**. That is what
+actually prints correctly. Verified with calipers on a physical card: the
+100.00 mm target read 100.00 mm and the 50.00 mm target read 50.00 mm.
 
-Every test page must be authored at the exact media size. A page authored at
-the wrong size makes `noscale` meaningless: the renderer either clips a
-fraction of a millimetre or the driver scales to fit, and neither failure is
-visible by eye on a badge.
+Earlier revisions of this file said the media was 139.7 x 88.9 mm and put
+the long axis first, then told you to trust that over the spike artifact.
+Both the number and the axis order were wrong. Do not "correct"
+`make-test-card.py` back to 139.7 x 88.9.
+
+The driver reports one form, named `140x88mm`, and the name understates it:
+it measures 89.0 x 142.2 mm portrait. The queue's DEVMODE sets
+`Orientation = 2`, landscape, which yields a 142.24 x 88.98 mm imaging area
+at 300 dpi. The long axis carries roughly 2.5 mm of overbleed past the
+139.7 mm card, which is why a 140 mm page fits with nothing clipped.
+
+Every test page must still be authored at its exact intended size. A page
+authored at the wrong size makes `noscale` meaningless: the renderer either
+clips a fraction of a millimetre or the driver scales to fit, and neither
+failure is visible by eye on a badge.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `hub.py` | the rig. Flask, five routes, one subprocess call |
+| `hub.py` | the rig. Flask, five routes |
+| `pdfium_print.py` | the renderer. PDFium raster, GDI blit, exact scale |
 | `caps.py` | dumps a driver's paper names, paperkind ids, and DEVMODE defaults |
-| `make-test-card.py` | generates the calibration card. Takes width and height in mm |
-| `test-card-139.7x88.9.pdf` | the current calibration card |
-| `spool\` | saved job PDFs. Safe to delete |
-| `out.pdf` | output of the `HUB-PDF` queue. Overwritten each print |
+| `make-test-card.py` | generates the calibration card. Edit `W, H` at the top |
+| `test-card-140x88.pdf` | the current calibration card |
+| `spool\` | saved job PDFs. Safe to delete. Gitignored |
+| `out.pdf` | output of the `HUB-PDF` queue. Overwritten each print. Gitignored |
+
+`make-test-card.py` takes no arguments, despite what earlier notes claimed.
+The page size is the `W, H` constants at the top of the file.
+
+The SumatraPDF binaries and the venv are gitignored. SumatraPDF is GPLv3 and
+must not end up in the repo; PDFium arrives through the `pypdfium2` wheel in
+the venv. `.gitattributes` marks PDFs binary, because git guesses "text" for
+reportlab's small output and would corrupt the calibration card by
+converting its line endings.
 
 The calibration card carries a 1 mm ruler, a 100.00 mm horizontal caliper
 target, a 50.00 mm vertical target, a line width ladder from 0.1 to 2.0 pt, a
@@ -80,10 +103,19 @@ printer.
 | Variable | Meaning |
 |---|---|
 | `HUB_QUEUE` | print queue name. **Required.** The rig refuses to print without it |
+| `HUB_RENDERER` | `pdfium` or `sumatra`. Default `pdfium` |
 | `HUB_MEDIA` | value for SumatraPDF `paper=`. Empty means the queue default |
 | `HUB_COLOR` | `color` or `monochrome` |
 | `HUB_SUMATRA` | path to `SumatraPDF.exe` |
 | `HUB_DIR` | working directory. Default `C:\hub` |
+
+`HUB_MEDIA` and `HUB_COLOR` apply to the SumatraPDF path only. The PDFium
+path inherits the queue's own default DEVMODE, so there is nothing to pass
+per job. Honouring `monochrome` there means editing DEVMODE, which is task 2
+work. `HUB_SUMATRA` matters only for the bake-off.
+
+Keep `sumatra` selectable for the bake-off. Do not use it for cards: it
+cannot open the `HUB-CARD` queue at all. See below.
 
 Routes: `/health`, `/printers`, `/print` (POST a PDF as form field `pdf`),
 `/jobs`, `/queue`.
@@ -91,12 +123,17 @@ Routes: `/health`, `/printers`, `/print` (POST a PDF as form field `pdf`),
 Start it:
 
 ```
-$env:HUB_SUMATRA = "C:\hub\SumatraPDF.exe"
-$env:HUB_QUEUE   = "HUB-PDF"
+$env:HUB_QUEUE = "HUB-PDF"
 C:\hub\.venv\Scripts\python.exe C:\hub\hub.py
 ```
 
+`HUB_RENDERER` defaults to `pdfium`, so that is all you need. Set
+`HUB_SUMATRA` only when running the bake-off.
+
 The process reads every variable once at start. Restart it after any change.
+Check `/health` and confirm `renderer` and `queue` read what you expect: a
+stale instance still holding port 8080 will answer for the one you just
+started, and it answers with the old code.
 
 ## Design rules that must survive every edit
 
@@ -111,7 +148,9 @@ The process reads every variable once at start. Restart it after any change.
 4. **Nothing lives under a user profile.** The shipped agent runs as
    LocalSystem with no interactive user. Use absolute machine-wide paths.
 5. **Never trigger a dialog.** No `-print-dialog`, no message boxes, no
-   `input()`. A dialog on a headless box is an outage.
+   `input()`. A dialog on a headless box is an outage. Running a renderer by
+   hand without `-silent` to read its error dialog is fine at a console, and
+   is how task 1 was diagnosed, but it must never be in the rig's own path.
 
 ## Verified so far
 
@@ -132,32 +171,75 @@ The process reads every variable once at start. Restart it after any change.
    Orientation is a `DEVMODE` field.
 6. The Microsoft PDF driver re-encodes the page as JPEG. Do not judge colour
    or text quality from `out.pdf`.
+7. **PDFium prints to the ZC10L, and SumatraPDF cannot.** A card printed
+   from `pdfium_print.py` directly, and a second printed end to end over
+   HTTP through the rig. The spool payload was 65812 bytes both ways, byte
+   for byte, so the HTTP path adds nothing of its own.
+8. Scale is correct on real PVC. Calipers on a physical card read the
+   100.00 mm target at 100.00 mm and the 50.00 mm target at 50.00 mm.
+9. Measured on `HUB-PDF`, the PDFium path reproduced the source PDF's ink
+   bounding box width exactly, 134.112 mm against 134.112 mm, with the
+   height one 600 dpi pixel over at 82.127 against 82.084. It placed the
+   page centred and unrotated, which is strictly better than item 5.
+10. The whole Win32 print path to `HUB-CARD` is healthy: `OpenPrinter`,
+    `DocumentProperties` (6056 bytes, 5836 of them driver-private) and
+    `CreateDC` all succeed, and a direct GDI job prints. Any renderer that
+    fails on this queue is failing on its own account.
+11. The ZC10L reports exactly one form: paperkind **276**, named
+    `140x88mm`, measuring 89.0 x 142.2 mm. Nothing near 139.7 x 88.9 mm
+    exists. Custom forms are not a credible path: the driver claims a
+    156.1 mm minimum length while its own only form is 142.2 mm long.
 
-## Open task 1 — the card print fails
+## Closed task 1 — the card print failed because of the renderer
 
-`HUB_QUEUE=HUB-CARD` with `HUB_MEDIA="140mm x 88mm"` returns SumatraPDF exit
-code 1 and an empty stderr.
+Resolved. Neither of the two hypotheses this file used to list was right. It
+was not the media string, and it was not missing custom-size support.
 
-Two known causes, in order of likelihood:
+**SumatraPDF 3.6.1 cannot open the `HUB-CARD` queue at all.** It fails with
+exit code 1 and this dialog, which `-silent` was suppressing:
 
-1. The media string was wrong. 140 x 88 mm is not the stock size. The stock
-   is 139.7 x 88.9 mm.
-2. The driver may not accept a custom size at all, only its own named forms.
+```
+Printing problem.
+Printer with given name doesn't exist
+```
 
-`-silent` suppresses the error dialog, which is why stderr is empty. To see
-the real error, run the same command by hand without `-silent`.
+A deliberately nonexistent printer name produces the *identical* dialog, so
+that wording is generic and does not mean what it says. The queue plainly
+exists.
 
-Do this:
+The failure is unconditional. Tested against a paused queue, so no media was
+spent: every `-print-settings` value fails, including `paper=140x88mm` with
+the driver's exact form name and bare `noscale` with no `paper=` at all, and
+so does every flag combination down to `-print-to HUB-CARD file.pdf` with no
+settings whatsoever. No job ever reaches the spooler. A failure that
+precedes any paper negotiation cannot be a media-string failure.
 
-1. Run `C:\hub\.venv\Scripts\python.exe C:\hub\caps.py HUB-CARD`. Find the
-   row near 139.7 x 88.9 mm. Record its exact name and its `paperkind` id.
-2. Set `HUB_MEDIA` to that exact name. `paper=` accepts a printer-reported
-   name as well as custom dimensions, and a named form avoids the question of
-   custom size support entirely.
-3. If no row is close, the driver needs a custom form defined. Report that
-   rather than guessing.
-4. Print the card. Then have a human measure the physical card with calipers
-   and report both targets.
+Ruled out, each one a finding in its own right:
+
+- 32/64-bit mismatch. Every binary is x64.
+- `SumatraPDF-settings.txt`. A pristine `-appdata` directory fails the same.
+- Printer enumeration. `HUB-CARD` appears at every level and flag `HUB-PDF`
+  does.
+- Queue configuration. Both queues are `winprint` with datatype `RAW`.
+- Printer name form. Exact, lowercase, UNC, dot-host and trailing-space all
+  return 1.
+- `-print-to-default` is separately broken: it reports success while
+  printing nothing, on both queues. Never trust its exit code.
+
+The fix was the renderer, not a configuration value. `pdfium_print.py`
+renders at the device's own dpi and blits 1:1 with `StretchDIBits`, so
+`noscale` is structural rather than something asked of a renderer, and it
+takes its DC from the queue's default DEVMODE so hand-configured driver
+settings are inherited. This is the same inheritance that task 2 wants.
+
+One cost to carry into the product: PDFium runs **in-process**. A PDF that
+crashes it now takes down the agent, where SumatraPDF's subprocess gave that
+isolation for free. The shipped agent should render in a child process.
+
+Still open here: `monochrome` on the PDFium path, which needs DEVMODE work,
+and whether SumatraPDF fails on every third-party driver or only Zebra's.
+Installing the label printer from the later-tasks list answers the second
+one, and customer IT will hit whichever answer it is.
 
 Do not burn more than one card per hypothesis. PVC costs real money. Test
 every change against `HUB-PDF` first.
@@ -228,8 +310,11 @@ Take the early signal here.
 
 ## Later tasks, in order
 
-1. Bake off PDFium against SumatraPDF. SumatraPDF is GPLv3 and is a spike
-   accelerator only. PDFium is BSD-licensed and is the safer thing to ship.
+1. Finish the PDFium/SumatraPDF bake-off. Mostly settled already, and not on
+   licensing: SumatraPDF cannot print a card at all, so PDFium is the
+   default and the GPLv3 dependency is retired. What is left is a quality
+   comparison on the queues where both work, and the child-process
+   rendering question above.
 2. Spike 4. Break the printer on purpose — card jam, empty hopper, ribbon
    out — and record what the spooler reports and how long it takes. Produce a
    written list split in two: conditions the agent can detect, and conditions
@@ -264,6 +349,34 @@ Take the early signal here.
   `--source winget`.
 - In reportlab, `setFillColorRGB` reads a fourth tuple value as alpha. An
   alpha of 0 makes every later object on the page invisible.
+- **When testing a card print, pause the queue, and purge before you
+  resume.** Pausing lets a job spool and hold, so you can see whether the
+  renderer reached the spooler without feeding PVC. Resuming while a job is
+  still queued prints it. This cost a card: a cleanup block resumed first
+  and purged second, and the purge never ran because the process died in
+  between. Purge, verify the queue is empty, then resume, and refuse to
+  resume if anything is still queued.
+- `git` is not on the PowerShell `PATH` on this box. Use the bash tool, or
+  call `git.exe` by absolute path.
+- Pausing a queue is `SetPrinter` with `PRINTER_CONTROL_PAUSE`. There is no
+  `Suspend-Printer` cmdlet; `Suspend-PrintJob` pauses a job, not the queue.
+- The spooler registers a job a moment after the renderer exits, and a file
+  port writes `out.pdf` later still. Check for a job or a file in a wait
+  loop, never immediately. Two apparent failures in this work were this race
+  and nothing else.
+- In this pywin32 build `DeviceCapabilities` returns dicts, not tuples:
+  `DC_PAPERSIZE` gives `{'x','y'}` and `DC_MINEXTENT`/`DC_MAXEXTENT` give
+  `{'Width','Length'}`, all in tenths of a millimetre.
+- Set `argtypes` before calling GDI through `ctypes`. An `HDC` overflows the
+  default `int` marshalling and raises "int too long to convert".
+- PDFium's default bitmap format is BGR, whose stride is not 4-byte aligned.
+  GDI DIBs require aligned rows, so force `FPDFBitmap_BGRx`.
+- Do not name a scratch script after a stdlib module. An `enum.py` beside
+  the script shadowed `enum` and broke `win32timezone` deep inside pywin32.
+- File visibility is inconsistent under the agent sandbox. The SumatraPDF
+  binaries were listed by one call and reported absent by the next, and git
+  and Python cannot see them at all even though the exe runs. `sumatra_found`
+  in `/health` is therefore not evidence of anything.
 
 ## Reporting
 
