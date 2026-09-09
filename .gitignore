@@ -21,6 +21,12 @@ sumatra/
 devmode/
 *.devmode
 
+# Service bits. nssm is a downloaded binary; the log is runtime output and
+# is the only way to see a Session 0 failure, so it must exist but not ship.
+nssm.exe
+service.log
+service.log.*
+
 # Print artifacts, all regenerated on demand.
 # spool/ holds delivered job PDFs; out.pdf is the HUB-PDF file port target
 # and is overwritten by every print.

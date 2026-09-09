@@ -126,10 +126,20 @@ def printers():
 
     A queue that appears here for you but not for LocalSystem is a
     per-user queue. That is spike 1 failing early, and it is worth
-    knowing on day one.
+    knowing on day one. queue_visible answers that directly, so nobody has
+    to eyeball two lists.
     """
     flags = win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
-    return jsonify([p[2] for p in win32print.EnumPrinters(flags, None, 4)])
+    raw = win32print.EnumPrinters(flags, None, 4)
+    # Level 4 returns dicts in this pywin32 build, not tuples. Indexing
+    # p[2] raised KeyError: 2, and only the Session 0 test caught it,
+    # because nothing had called this route before.
+    names = [p["pPrinterName"] if isinstance(p, dict) else p[2] for p in raw]
+    return jsonify(
+        printers=names,
+        queue=QUEUE or None,
+        queue_visible=bool(QUEUE) and QUEUE in names,
+    )
 
 
 @app.post("/print")

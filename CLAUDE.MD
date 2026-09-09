@@ -19,8 +19,19 @@ https://claude.ai/code/artifact/a107db7a-78a7-4e59-8bc1-d917c5537ca4
 
 ## The machine
 
-Windows 11, development workstation. User profile `pheed`. Project root
-`C:\hub`.
+Windows 11. User profile `pheed`. Project root `C:\hub`. Hostname
+`PHEEDLOOP-LABS`, reachable on Wi-Fi at 192.168.1.30.
+
+**This box is the mini PC**, not a separate development workstation. Earlier
+revisions of this file called it a workstation and deferred the no-login
+reboot test to "the mini PC", which is this machine. There is nowhere else to
+defer to, so that test belongs here.
+
+Only Wi-Fi has a routable address; the Ethernet interface sits on a
+169.254 link-local address, so there is no DHCP on it. The Wi-Fi profile
+`PheedLoop Main` is an **All User Profile**, which is what makes the no-login
+test possible: a per-user profile would leave the machine with no network
+until somebody logged in.
 
 | Thing | Value |
 |---|---|
@@ -285,6 +296,21 @@ started, and it answers with the old code.
     PDF, so the only difference between them is the DEVMODE. That pair is
     the demonstration for the memo: a vendor UI setting can silently defeat
     scale, and a pinned blob defeats it back.
+22. **A `LocalSystem` service prints.** Registered with `nssm` as
+    `PheedLoopHub`, confirmed running as `LocalSystem` by
+    `Win32_Service.StartName`, and it printed a card through HTTP with
+    `scale_pinned: true` and 300 dpi. Session 0 is not an obstacle to the
+    GDI print path.
+23. **Machine-scope environment variables do reach the service.** `/health`
+    from the service reported the right queue and the pinned blob, so
+    `[Environment]::SetEnvironmentVariable(..., "Machine")` is a working
+    delivery mechanism for `HUB_DEVMODE`. Worth stating because a service
+    that starts without that variable prints silently wrong-sized cards.
+24. **The printers are not per-user.** `HUB-CARD` is registered under
+    `HKLM\SYSTEM\CurrentControlSet\Control\Print\Printers`, its
+    `PER_USER` attribute is clear, and `HKCU\Printers\Connections` is empty.
+    So the queue a logged-in user sees is the queue the service sees, which
+    is what spike 1 needed and is confirmed by item 22 actually printing.
 
 ## Closed task 1 — the card print failed because of the renderer
 
@@ -528,6 +554,22 @@ Take the early signal here.
 - In this pywin32 build `DeviceCapabilities` returns dicts, not tuples:
   `DC_PAPERSIZE` gives `{'x','y'}` and `DC_MINEXTENT`/`DC_MAXEXTENT` give
   `{'Width','Length'}`, all in tenths of a millimetre.
+- Same trap in `EnumPrinters`: **level 4 returns dicts too**, so
+  `p[2]` raises `KeyError: 2`. Use `p["pPrinterName"]`. This sat unnoticed in
+  `/printers` until the Session 0 test called that route for the first time.
+  Assume any pywin32 call returning a structure gives you a dict here.
+- `nssm set <svc> ObjectName LocalSystem` prints "Reset parameter ObjectName
+  to its default", which looks like a failure and is not: LocalSystem is
+  nssm's default. Confirm the truth with
+  `Get-CimInstance Win32_Service -Filter "Name='PheedLoopHub'"` and read
+  `StartName`, rather than trusting nssm's wording.
+- Always set `AppStdout` and `AppStderr` on an nssm service. Session 0 has no
+  console, so without a log a startup crash or a route raising an exception
+  is completely invisible. The `/printers` bug above was diagnosed purely
+  from `service.log`.
+- `nssm.exe` lives at `C:\hub\nssm.exe` and is called by absolute path on
+  purpose. It is deliberately **not** on the PATH, because `setx PATH`
+  truncates at 1024 characters and there is no reason to risk it.
 - Set `argtypes` before calling GDI through `ctypes`. An `HDC` overflows the
   default `int` marshalling and raises "int too long to convert".
 - PDFium's default bitmap format is BGR, whose stride is not 4-byte aligned.
