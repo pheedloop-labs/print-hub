@@ -76,6 +76,8 @@ failure is visible by eye on a badge.
 |---|---|
 | `hub.py` | the rig. Flask, five routes |
 | `pdfium_print.py` | the renderer. PDFium raster, GDI blit, exact scale |
+| `devmode.py` | capture and replay a queue's DEVMODE, vendor bytes included |
+| `devmode\` | captured blobs. Restore points, not source. Gitignored |
 | `caps.py` | dumps a driver's paper names, paperkind ids, and DEVMODE defaults |
 | `make-test-card.py` | generates the calibration card. Edit `W, H` at the top |
 | `test-card-140x88.pdf` | the current calibration card |
@@ -182,7 +184,20 @@ started, and it answers with the old code.
     `DocumentProperties` (6056 bytes, 5836 of them driver-private) and
     `CreateDC` all succeed, and a direct GDI job prints. Any renderer that
     fails on this queue is failing on its own account.
-11. The ZC10L reports exactly one form: paperkind **276**, named
+11. **DEVMODE capture and replay works, vendor bytes included.**
+    `devmode.py` captures all 6056 bytes of `HUB-CARD`'s default, 5836 of
+    them driver-private, and writes them back byte-identically with
+    `SetPrinter` level 2. Proven on both queues.
+12. **`SetPrinter` level 2 does not need full administrator.** This shell is
+    not elevated and the write still succeeds, so manage-printer rights are
+    enough. That matters for the deployment model: the hub does not have to
+    run elevated to own its queue settings.
+13. Replay changes real rendering, not just stored bytes. Flipping
+    `dmOrientation` on `HUB-PDF` moved the DC from 5100 x 6600 to
+    6600 x 5100, and `pdfium_print.py` picked it up with no code change
+    because it builds its DC with a NULL DEVMODE. Restoring the saved blob
+    returned both the bytes and the geometry exactly.
+14. The ZC10L reports exactly one form: paperkind **276**, named
     `140x88mm`, measuring 89.0 x 142.2 mm. Nothing near 139.7 x 88.9 mm
     exists. Custom forms are not a credible path: the driver claims a
     156.1 mm minimum length while its own only form is 142.2 mm long.

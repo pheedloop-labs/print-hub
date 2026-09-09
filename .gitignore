@@ -16,6 +16,11 @@ PdfPreview.dll
 SumatraPDF-settings.txt
 sumatra/
 
+# Captured DEVMODE blobs. Machine- and queue-specific, and the vendor bytes
+# are opaque, so they are restore points on this box rather than source.
+devmode/
+*.devmode
+
 # Print artifacts, all regenerated on demand.
 # spool/ holds delivered job PDFs; out.pdf is the HUB-PDF file port target
 # and is overwritten by every print.
