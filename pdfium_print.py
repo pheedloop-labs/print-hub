@@ -22,6 +22,7 @@ Opens no dialog. Spawns no subprocess.
 
 import ctypes
 import ctypes.wintypes as wt
+import pathlib
 
 import pypdfium2 as pdfium
 import pypdfium2.raw as pdfium_c
@@ -91,12 +92,43 @@ gdi32.StretchDIBits.argtypes = [
 ]
 
 
-def device_geometry(queue):
-    """Read the queue's printable geometry. Creates and frees a DC only."""
-    hdc = gdi32.CreateDCW(None, queue, None, None)
+def load_devmode(devmode):
+    """Accept raw bytes or a path, and sanity check the blob.
+
+    Passing a DEVMODE per job is not a nicety on this hardware. The ZC10L
+    driver re-asserts its own stored settings over anything written into the
+    queue default with SetPrinter, within about ten seconds, so the queue
+    default cannot be trusted to hold. A DEVMODE handed straight to CreateDC
+    wins and cannot be raced.
+    """
+    if devmode is None:
+        return None
+    blob = devmode if isinstance(devmode, (bytes, bytearray)) else \
+        pathlib.Path(devmode).read_bytes()
+    blob = bytes(blob)
+    size = int.from_bytes(blob[68:70], "little")
+    extra = int.from_bytes(blob[70:72], "little")
+    if size + extra != len(blob):
+        raise ValueError(
+            f"DEVMODE blob is {len(blob)} bytes but declares dmSize {size} "
+            f"+ dmDriverExtra {extra} = {size + extra}")
+    name = blob[0:64].decode("utf-16-le", errors="replace").split("\x00")[0]
+    return blob, name
+
+
+def _make_dc(queue, blob):
+    buf = ctypes.create_string_buffer(blob, len(blob)) if blob else None
+    hdc = gdi32.CreateDCW(None, queue, None, buf)
     if not hdc:
         raise OSError(f"CreateDC failed for {queue!r}: "
                       f"err={ctypes.get_last_error()}")
+    return hdc
+
+
+def device_geometry(queue, devmode=None):
+    """Read the queue's printable geometry. Creates and frees a DC only."""
+    loaded = load_devmode(devmode)
+    hdc = _make_dc(queue, loaded[0] if loaded else None)
     try:
         g = {
             "dpi_x": gdi32.GetDeviceCaps(hdc, LOGPIXELSX),
@@ -113,13 +145,30 @@ def device_geometry(queue):
     return g
 
 
-def print_pdf(pdf_path, queue, center=True, doc_name=None, dry_run=False):
+def print_pdf(pdf_path, queue, center=True, doc_name=None, dry_run=False,
+              devmode=None):
     """Render every page at device dpi and blit it 1:1 to the queue.
 
     Returns a list of per-page geometry dicts. With dry_run, computes and
     returns the same geometry without creating a print job.
+
+    devmode takes raw bytes or a path to a captured blob. Pass one whenever
+    the printed size has to be trustworthy: the exact-scale guarantee here is
+    only as honest as the dpi the driver reports, and a vendor setting can
+    make that dishonest. See load_devmode.
     """
-    geo = device_geometry(queue)
+    loaded = load_devmode(devmode)
+    if loaded:
+        blob, blob_device = loaded
+        if blob_device.lower() != queue.lower():
+            raise ValueError(
+                f"DEVMODE blob was captured from {blob_device!r}, not "
+                f"{queue!r}. Vendor-private bytes are not portable between "
+                f"queues.")
+    else:
+        blob = None
+
+    geo = device_geometry(queue, blob)
     dpi_x, dpi_y = geo["dpi_x"], geo["dpi_y"]
     if dpi_x != dpi_y:
         raise NotImplementedError(
@@ -133,10 +182,7 @@ def print_pdf(pdf_path, queue, center=True, doc_name=None, dry_run=False):
     started = False
     try:
         if not dry_run:
-            hdc = gdi32.CreateDCW(None, queue, None, None)
-            if not hdc:
-                raise OSError(f"CreateDC failed for {queue!r}: "
-                              f"err={ctypes.get_last_error()}")
+            hdc = _make_dc(queue, blob)
             info = DOCINFOW(ctypes.sizeof(DOCINFOW),
                             doc_name or f"hub {pdf_path}", None, None, 0)
             job = gdi32.StartDocW(hdc, ctypes.byref(info))
@@ -204,13 +250,18 @@ def main():
     ap.add_argument("--no-center", action="store_true",
                     help="place at the printable origin instead of centred")
     ap.add_argument("--name", default=None, help="spooler document name")
+    ap.add_argument("--devmode", default=None,
+                    help="captured DEVMODE blob to apply to this job. Use "
+                         "one when the printed size must be trustworthy")
     a = ap.parse_args()
 
     geo, pages = print_pdf(a.pdf, a.queue, center=not a.no_center,
-                           doc_name=a.name, dry_run=a.dry_run)
+                           doc_name=a.name, dry_run=a.dry_run,
+                           devmode=a.devmode)
 
     pw, ph = geo["printable_px"]
     print(f"queue         : {a.queue}")
+    print(f"devmode       : {a.devmode or '(none - inherits queue default)'}")
     print(f"dpi           : {geo['dpi_x']} x {geo['dpi_y']}")
     print(f"printable px  : {pw} x {ph}")
     print(f"printable mm  : {pw/geo['dpi_x']*25.4:.2f} x "

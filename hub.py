@@ -15,7 +15,17 @@ Or serve it the way the service will:
 Configure it with environment variables, so you never edit code to switch
 printers:
     HUB_QUEUE     print queue name          REQUIRED
+    HUB_DEVMODE   captured DEVMODE blob     strongly recommended
     HUB_DIR       working directory         default C:\\hub
+
+Set HUB_DEVMODE for anything that has to come out the right size. The
+exact-scale guarantee below is only as honest as the dpi the driver reports,
+and a vendor setting can make that dishonest: setting Zoom-in/out to 105 in
+the ZC10L UI makes the driver report 315 dpi instead of 300, and the card
+comes out 5 percent oversized while every number the rig prints still looks
+correct. Applying a captured blob per job pins it. Capture one with
+devmode.py. Writing the queue default instead does not work on this driver,
+which re-asserts its own settings within about ten seconds.
 
 Rendering is PDFium, in pdfium_print.py. There is nothing to configure per
 job. The page is rendered at the device's own dpi and blitted 1:1, so scale
@@ -34,6 +44,7 @@ save dialog, and a modal dialog blocks the whole silent print path. Use a
 real printer.
 """
 
+import hashlib
 import json
 import os
 import pathlib
@@ -47,6 +58,17 @@ import pdfium_print
 HUB_DIR = pathlib.Path(os.environ.get("HUB_DIR", r"C:\hub"))
 SPOOL_DIR = HUB_DIR / "spool"
 QUEUE = os.environ.get("HUB_QUEUE", "")
+DEVMODE_PATH = os.environ.get("HUB_DEVMODE", "")
+
+# Read once at start, like every other setting. A blob that goes missing
+# later should not silently turn into an unpinned print.
+DEVMODE = None
+DEVMODE_ERROR = None
+if DEVMODE_PATH:
+    try:
+        DEVMODE = pathlib.Path(DEVMODE_PATH).read_bytes()
+    except OSError as exc:
+        DEVMODE_ERROR = f"{type(exc).__name__}: {exc}"
 
 SPOOL_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -80,12 +102,19 @@ def queue_error():
 @app.get("/health")
 def health():
     return jsonify(
-        ok=bool(QUEUE),
+        ok=bool(QUEUE) and DEVMODE_ERROR is None,
         queue=QUEUE or "(not set - set HUB_QUEUE)",
         # Literal. It is here so a stale instance squatting on this port is
         # obvious: an older build answers with a different shape.
         renderer="pdfium",
-        settings="(queue default DEVMODE)",
+        devmode=DEVMODE_PATH or None,
+        devmode_bytes=len(DEVMODE) if DEVMODE else 0,
+        devmode_sha256=(hashlib.sha256(DEVMODE).hexdigest()[:16]
+                        if DEVMODE else None),
+        devmode_error=DEVMODE_ERROR,
+        # Printed size is only trustworthy when a blob pins it. Without one
+        # the queue default decides, and the driver can change that under us.
+        scale_pinned=DEVMODE is not None,
         hub_dir=str(HUB_DIR),
         jobs_seen=len(seen),
     )
@@ -128,9 +157,12 @@ def do_print():
     # Measured against HUB-PDF: ink bbox width identical to the source PDF,
     # height one 600 dpi pixel over. Calipers on a real card read both
     # targets exactly, 100.00 and 50.00 mm.
+    if DEVMODE_ERROR:
+        return jsonify(error=f"HUB_DEVMODE unreadable: {DEVMODE_ERROR}"), 500
+
     try:
         geo, pages = pdfium_print.print_pdf(
-            str(path), QUEUE, doc_name=f"hub {job_id}")
+            str(path), QUEUE, doc_name=f"hub {job_id}", devmode=DEVMODE)
     except Exception as exc:
         # PDFium renders in-process, so this is the only thing between a bad
         # PDF and the agent. SumatraPDF's subprocess gave that isolation for
@@ -151,6 +183,7 @@ def do_print():
         state="sent",
         queue=QUEUE,
         renderer="pdfium",
+        scale_pinned=DEVMODE is not None,
         dpi=geo["dpi_x"],
         pages=[{
             "authored_mm": [round(v, 3) for v in p["authored_mm"]],

@@ -239,20 +239,40 @@ started, and it answers with the old code.
     section also differ, but they are residue after the NUL terminator inside
     the fixed 32-wchar `dmDeviceName` field, left from a longer string. Both
     blobs still name `HUB-CARD`. Do not read them as a settings change.
-18. **A driver UI setting can silently change effective scale, and the zoom
-    setting is the one to watch.** At 105% the driver reports
-    `LOGPIXELSX` 315 instead of 300 and `HORZRES` 1764 instead of 1680, both
-    exactly 1.05x, while `HORZSIZE` still claims the same 142 mm. Those two
-    claims cannot both be true. Either the dpi is honest, in which case
-    rendering at the reported dpi cancels the zoom and a 140 mm page still
-    prints at 140 mm, or the hardware is really 300 dpi and the same page
-    prints at 146.98 mm, a 5% enlargement.
+18. **A driver UI setting silently breaks the scale guarantee. Confirmed on
+    PVC.** At 105% the driver reports `LOGPIXELSX` 315 instead of 300 and
+    `HORZRES` 1764 instead of 1680, both exactly 1.05x, while `HORZSIZE`
+    still claims the same 142 mm. Both claims cannot hold, and the card
+    settled which one lies: **the printed card came out 5% oversized.**
 
-    Device caps cannot settle it. Only a card can. Until it is settled,
-    assume the queue's DEVMODE can defeat the renderer's exact-scale
-    guarantee without any error anywhere, which is the strongest argument
-    for the agent asserting a known-good blob before every job rather than
-    trusting whatever the queue happens to hold.
+    The reported dpi is dishonest. `pdfium_print` derives its scale from it,
+    rendered 1737 px, and reported `raster_mm 140.063` in its own output.
+    That number was a lie, and nothing anywhere raised an error. The rig
+    would have answered `sent` with correct-looking geometry in its JSON
+    while a 5% oversized card came off the printer.
+
+    Treat "exact scale by construction" as conditional: it holds only when
+    the DEVMODE in force is known. Pin it, per item 20.
+19. **A `SetPrinter` write to the queue default does not stick on this
+    driver.** It reverts within about ten seconds. The ZC10L re-asserts its
+    own stored configuration, so anything written into the queue default is
+    transient. The write succeeds, reads back correct, and then quietly goes
+    away.
+
+    That kills the design this file used to call preferred: capture the blob
+    into the queue default and let every renderer inherit it. On this driver
+    nothing can be made to stick that way.
+20. **Per-job DEVMODE handed straight to `CreateDC` wins, and cannot be
+    raced.** With the queue default sitting at zoom 105, a DC created with
+    the zoom-100 blob reports 300 dpi and 1680 x 1051, while a NULL DEVMODE
+    reports 315 and 1764 x 1103. So the fix is per-job, not per-queue:
+    `pdfium_print --devmode <blob>`, or `HUB_DEVMODE` for the rig, which
+    reports `scale_pinned` in `/health` and in every print response.
+
+    Note what this means for the renderer decision. SumatraPDF could not
+    accept a DEVMODE blob at all, which is exactly why the old notes reached
+    for the queue-default design that this driver defeats. Dropping it is
+    what makes this task solvable, not just a licensing convenience.
 
 ## Closed task 1 — the card print failed because of the renderer
 
@@ -333,10 +353,16 @@ What is known already:
   whatever the queue's default is. That is a convenience, not an obstacle:
   there is no per-job plumbing to write.
 
-The preferred design: write the captured blob into the **queue's own default
-settings** with `SetPrinter` level 2. Every renderer then inherits it, which
-keeps capture and replay as one problem instead of one problem per renderer,
-and it is already how the current renderer picks up its settings.
+**The design changed, because the old one does not work here.** Writing the
+captured blob into the queue's own default with `SetPrinter` level 2 was the
+plan, so every renderer would inherit it. On this driver the write reverts
+within about ten seconds: the ZC10L re-asserts its own stored settings. See
+Verified item 19.
+
+What works is per-job: hand the blob straight to `CreateDC`. It overrides the
+queue default and no background re-assertion can race it. `pdfium_print`
+takes `--devmode`, and the rig takes `HUB_DEVMODE`. `SetPrinter` remains
+useful only for capture-side experiments, not as the delivery mechanism.
 
 `SetPrinter` changes the queue globally, which is acceptable on a dedicated
 hub. Say so in the memo. It turned out **not** to need administrator, only
@@ -363,14 +389,16 @@ Acceptance for this task:
    silently substitutes its own and prints normally. There is no failure
    signature to put in front of the team.
 
-Cross-config replay is now **proven**, using `Zoom-in/out[Z]` at 100 and 105
-as the two configurations. See Verified item 17. The mechanism is done.
+Cross-config replay is **proven**, using `Zoom-in/out[Z]` at 100 and 105 as
+the two configurations. See Verified item 17. The scale question is settled
+too, on PVC: 105% really does print 5% oversized, so pinning a blob is
+**mandatory**, not optional. See items 18 to 20.
 
-What remains is not about DEVMODE at all. It is the scale question in
-Verified item 18: does a 105% zoom actually enlarge the printed card, or
-does rendering at the driver's own reported dpi cancel it out? One card
-settles it, and the answer decides whether the agent merely *can* assert a
-known-good blob or **must**.
+What remains: one card printed through the rig with `HUB_DEVMODE` set while
+the queue default sits at 105, to confirm end to end on media what the
+device caps already show. The zoom is currently 105 in the driver UI, which
+makes this the ideal moment: an unpinned print is known to come out wrong,
+so a correct card proves the pin is doing the work.
 
 Restore points live in `devmode\`, gitignored:
 
