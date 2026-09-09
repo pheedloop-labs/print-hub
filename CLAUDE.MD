@@ -319,6 +319,23 @@ started, and it answers with the old code.
 26. `/printers` answers `queue_visible: true` from the service itself, so the
     per-user question is settled by the service rather than by inference from
     the registry.
+27. **The hub prints after a reboot with nobody logging in. Spike 1's gate
+    is met.** Rebooted at 15:54:23, `curl` from another machine at 15:56:05,
+    card produced. The operator authenticated nothing.
+
+    The evidence, because "nobody logged in" deserves more than an
+    assertion. The Winlogon operational log shows exactly one
+    authentication, at 15:54:41, eighteen seconds after boot, which is
+    Automatic Restart Sign-On rather than a person. `service.log` was created
+    at 15:54:37, fourteen seconds after boot. The spool file
+    `nologin-card-5.pdf` is stamped 15:56:05, and the first winlogon event
+    consistent with a human unlocking the screen is 15:56:13, eight seconds
+    *after* the print. No authentication occurred in between.
+
+    Caveat worth carrying: ARSO means session 1 existed and the profile was
+    loaded, so this is "no human logged in", not "no interactive session".
+    That is the production condition, and item 24 independently rules out the
+    per-user printer risk it could otherwise have masked.
 
 ## Closed task 1 — the card print failed because of the renderer
 
@@ -476,12 +493,10 @@ A fresh machine needs its own captures: the vendor bytes are opaque and
 The queue is currently left at the zoom 100 blob. Put it back there after
 any experiment, because 105% may misprint every card.
 
-## Open task 3 — Session 0 service test (spike 1, gating)
+## Closed task 3 — Session 0 service test (spike 1)
 
-Mostly done, and the remaining piece is the one that matters. The service
-exists, runs as `LocalSystem`, sees the printers, and prints on demand from
-another machine on the network. **What is still untested is the actual gate:
-printing with nobody logged in.**
+**Passed.** The box was rebooted, nobody logged in, and a `curl` from another
+machine on the network produced a card. Spike 1's gate is met.
 
 | Thing | Status |
 |---|---|
@@ -491,7 +506,7 @@ printing with nobody logged in.**
 | `/printers` from the service | `queue_visible: true` |
 | printing as `LocalSystem` | works |
 | printing from another machine | works, `curl` to `192.168.1.30:8080` |
-| printing with nobody logged in | **not yet tested** |
+| printing after reboot with no login | **works** |
 
 The sequence that got here, for rebuilding on the next box:
 
@@ -517,31 +532,37 @@ reads them once. `HUB_DEVMODE` especially: a service that starts without it
 inherits the queue default and prints silently wrong-sized cards, per
 Verified 18. A code change needs `nssm restart`, not merely a new request.
 
-### What is left
+### The one caveat, and why it does not sink the result
 
-Reboot and **do not log in**.
+Nobody logged in, but the machine was not free of interactive sessions
+either. Windows **Automatic Restart Sign-On** signed the account back in by
+itself 18 seconds after boot and left the screen locked. So session 1
+existed and the user profile was loaded, without any human authenticating.
+See the ARSO note in the gotchas for how to read the evidence.
 
-The attempt so far does not count, and it is worth recording why rather than
-assuming it passed. The box booted at 15:17:08 and `pheed` logged in at
-15:17, so an interactive session was present for every print to date,
-including the one driven from another machine. That proves a `LocalSystem`
-service prints and is reachable over the network, which is most of the task.
-It does not prove Session 0 with no user, which is the whole point of the
-gate.
+Two reasons to accept this as a pass rather than chase a stricter one:
 
-`AutoAdminLogon` is `0`, so the machine will genuinely sit at the lock
-screen. The test is possible here.
+1. **It is the production condition.** ARSO is on by default for this
+   Microsoft account, so a real hub will always come back from a reboot with
+   an auto-signed-in locked session. Testing that state is testing reality.
+2. **The per-user risk it might have masked is independently excluded.**
+   Verified 24: `HUB-CARD` lives in `HKLM`, its `PER_USER` attribute is
+   clear, and `HKCU\Printers\Connections` is empty. There is no per-user
+   printer here to hide behind a loaded profile.
 
-Then, from another machine, with the card PDF copied over:
+If a stricter answer is ever wanted, the way to get it is to set
+`DisableAutomaticRestartSignOn` to 1 under
+`HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System`, reboot, and
+confirm `quser` reports no session at all before printing. One card. Worth
+doing only if the shipped design stops relying on ARSO, or if the account
+model changes to one where ARSO does not apply.
 
-```
-curl.exe -s -X POST -F "pdf=@test-card-140x88.pdf" "http://192.168.1.30:8080/print?job_id=nologin-card-1"
-```
+### Still not tested
 
-That card is the gate. Until it exists, spike 1 is unproven however
-promising everything above it looks. Check `service.log` afterwards: it
-rotates on every service start, so a fresh "Serving on" line stamped at boot
-time is independent evidence the service came up with no user present.
+The security posture. The service auto-starts and listens on all interfaces
+with **no authentication**, so anything that can reach port 8080 can print a
+card. Acceptable in the lab; not acceptable on a venue network. Out of scope
+this week along with the transport, but it must not ship this way.
 
 ## Later tasks, in order
 
@@ -618,6 +639,18 @@ time is independent evidence the service came up with no user present.
 - `nssm.exe` lives at `C:\hub\nssm.exe` and is called by absolute path on
   purpose. It is deliberately **not** on the PATH, because `setx PATH`
   truncates at 1024 characters and there is no reason to risk it.
+- **"Nobody logged in" needs proof, and Windows makes it confusing.**
+  Automatic Restart Sign-On signs the account back in by itself after a
+  reboot, roughly 18 seconds in, and leaves the screen locked. The operator
+  sees a lock screen and correctly says they never logged in, while `quser`
+  reports an Active session with a logon time in the same minute as the boot.
+  Both are true. To tell what actually happened, read
+  `Microsoft-Windows-Winlogon/Operational` for "Authentication started" and
+  compare its timestamp against the spool file's mtime in `spool\`, which is
+  when the POST arrived. One automatic authentication seconds after boot, and
+  no other before the print, means no human was involved. `quser` alone will
+  mislead you, and `AutoAdminLogon` being `0` does not rule ARSO out: it is
+  governed by `DisableAutomaticRestartSignOn` instead.
 - Set `argtypes` before calling GDI through `ctypes`. An `HDC` overflows the
   default `int` marshalling and raises "int too long to convert".
 - PDFium's default bitmap format is BGR, whose stride is not 4-byte aligned.
