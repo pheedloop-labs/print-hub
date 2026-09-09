@@ -15,20 +15,19 @@ Or serve it the way the service will:
 Configure it with environment variables, so you never edit code to switch
 printers:
     HUB_QUEUE     print queue name          REQUIRED
-    HUB_RENDERER  "pdfium" or "sumatra"     default "pdfium"
-    HUB_MEDIA     paper size for Sumatra    default "" (queue default)
-    HUB_COLOR     "color" or "monochrome"   default "color"
-    HUB_SUMATRA   path to SumatraPDF.exe
     HUB_DIR       working directory         default C:\\hub
 
-HUB_MEDIA and HUB_COLOR apply to the SumatraPDF path only. The PDFium path
-inherits the queue's own default DEVMODE instead, which is what spike 2
-wants anyway, so there is nothing to pass per job.
+Rendering is PDFium, in pdfium_print.py. There is nothing to configure per
+job. The page is rendered at the device's own dpi and blitted 1:1, so scale
+is exact by construction rather than requested, and the DC comes from the
+queue's own default DEVMODE, so whatever was configured by hand in the
+vendor driver UI is inherited. That is the same inheritance spike 2 wants.
 
-SumatraPDF cannot print to the ZC10L queue at all: it fails with "Printer
-with given name doesn't exist" for every settings string and every flag
-combination, while the same GDI path succeeds. So "pdfium" is the default.
-Keep "sumatra" selectable for the bake-off, not for card printing.
+SumatraPDF is gone, and there is no HUB_RENDERER any more. It could not open
+the HUB-CARD queue at all, failing with "Printer with given name doesn't
+exist" for every settings string and every flag combination while the same
+GDI path succeeded, and it is GPLv3 besides. Do not reintroduce it as a
+renderer. To compare output quality, drive it by hand.
 
 Do not point HUB_QUEUE at "Microsoft Print to PDF". That queue opens a
 save dialog, and a modal dialog blocks the whole silent print path. Use a
@@ -38,7 +37,6 @@ real printer.
 import json
 import os
 import pathlib
-import subprocess
 import uuid
 
 import win32print
@@ -49,12 +47,6 @@ import pdfium_print
 HUB_DIR = pathlib.Path(os.environ.get("HUB_DIR", r"C:\hub"))
 SPOOL_DIR = HUB_DIR / "spool"
 QUEUE = os.environ.get("HUB_QUEUE", "")
-RENDERER = os.environ.get("HUB_RENDERER", "pdfium").lower()
-MEDIA = os.environ.get("HUB_MEDIA", "")
-COLOR = os.environ.get("HUB_COLOR", "color")
-SUMATRA = os.environ.get(
-    "HUB_SUMATRA", r"C:\Program Files\SumatraPDF\SumatraPDF.exe"
-)
 
 SPOOL_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -64,16 +56,6 @@ app = Flask(__name__)
 # Spike 6 makes this durable on disk with a 24 hour window. In memory is
 # enough to prove the idea today.
 seen = {}
-
-
-def print_settings():
-    """Build the SumatraPDF -print-settings string."""
-    parts = ["noscale"]
-    if MEDIA:
-        parts.append(f"paper={MEDIA}")
-    if COLOR:
-        parts.append(COLOR)
-    return ",".join(parts)
 
 
 def jsonable(value):
@@ -98,12 +80,12 @@ def queue_error():
 @app.get("/health")
 def health():
     return jsonify(
-        ok=bool(QUEUE) and RENDERER in ("pdfium", "sumatra"),
+        ok=bool(QUEUE),
         queue=QUEUE or "(not set - set HUB_QUEUE)",
-        renderer=RENDERER,
-        settings=print_settings() if RENDERER == "sumatra" else "(queue default DEVMODE)",
-        sumatra=SUMATRA,
-        sumatra_found=pathlib.Path(SUMATRA).exists(),
+        # Literal. It is here so a stale instance squatting on this port is
+        # obvious: an older build answers with a different shape.
+        renderer="pdfium",
+        settings="(queue default DEVMODE)",
         hub_dir=str(HUB_DIR),
         jobs_seen=len(seen),
     )
@@ -142,78 +124,41 @@ def do_print():
     path = SPOOL_DIR / f"{job_id}.pdf"
     request.files["pdf"].save(path)
 
-    if RENDERER == "pdfium":
-        # Rendered at the device's own dpi and blitted 1:1, so nothing
-        # scales. Measured against HUB-PDF: ink bbox width identical to the
-        # source, height one 600 dpi pixel over. Calipers on a real card read
-        # both targets exactly.
-        try:
-            geo, pages = pdfium_print.print_pdf(
-                str(path), QUEUE, doc_name=f"hub {job_id}")
-        except Exception as exc:
-            seen[job_id] = "failed"
-            return jsonify(
-                job_id=job_id,
-                state="failed",
-                renderer="pdfium",
-                error=f"{type(exc).__name__}: {exc}",
-            ), 500
-
-        seen[job_id] = "sent"
-        return jsonify(
-            job_id=job_id,
-            state="sent",
-            queue=QUEUE,
-            renderer="pdfium",
-            dpi=geo["dpi_x"],
-            pages=[{
-                "authored_mm": [round(v, 3) for v in p["authored_mm"]],
-                "raster_mm": [round(v, 3) for v in p["raster_mm"]],
-                "placed_px": list(p["dest_px"]),
-                "clipped": p["clipped"],
-            } for p in pages],
-        )
-
-    if RENDERER != "sumatra":
-        return jsonify(
-            error=f"HUB_RENDERER={RENDERER!r} is not a renderer",
-            hint='use "pdfium" or "sumatra"',
-        ), 500
-
-    if not pathlib.Path(SUMATRA).exists():
-        return jsonify(error=f"SumatraPDF not found at {SUMATRA}"), 500
-
-    cmd = [
-        SUMATRA,
-        "-print-to", QUEUE,
-        "-print-settings", print_settings(),
-        "-silent",
-        "-exit-when-done",
-        str(path),
-    ]
-
+    # Rendered at the device's own dpi and blitted 1:1, so nothing scales.
+    # Measured against HUB-PDF: ink bbox width identical to the source PDF,
+    # height one 600 dpi pixel over. Calipers on a real card read both
+    # targets exactly, 100.00 and 50.00 mm.
     try:
-        result = subprocess.run(cmd, timeout=90, capture_output=True, text=True)
-    except subprocess.TimeoutExpired:
-        seen[job_id] = "timeout"
-        return jsonify(job_id=job_id, state="timeout", cmd=cmd), 504
-
-    if result.returncode != 0:
+        geo, pages = pdfium_print.print_pdf(
+            str(path), QUEUE, doc_name=f"hub {job_id}")
+    except Exception as exc:
+        # PDFium renders in-process, so this is the only thing between a bad
+        # PDF and the agent. SumatraPDF's subprocess gave that isolation for
+        # free. The shipped agent should render in a child process.
         seen[job_id] = "failed"
         return jsonify(
             job_id=job_id,
             state="failed",
-            returncode=result.returncode,
-            stderr=(result.stderr or "")[:2000],
-            cmd=cmd,
+            error=f"{type(exc).__name__}: {exc}",
         ), 500
 
     # "sent", never "printed". The spooler reports completion when the job
     # leaves the spooler, not when the card lands in the tray. Spike 4
     # decides whether we ever earn the word "printed".
     seen[job_id] = "sent"
-    return jsonify(job_id=job_id, state="sent", queue=QUEUE,
-                   renderer="sumatra", settings=print_settings())
+    return jsonify(
+        job_id=job_id,
+        state="sent",
+        queue=QUEUE,
+        renderer="pdfium",
+        dpi=geo["dpi_x"],
+        pages=[{
+            "authored_mm": [round(v, 3) for v in p["authored_mm"]],
+            "raster_mm": [round(v, 3) for v in p["raster_mm"]],
+            "placed_px": list(p["dest_px"]),
+            "clipped": p["clipped"],
+        } for p in pages],
+    )
 
 
 @app.get("/jobs")

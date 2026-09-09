@@ -27,7 +27,7 @@ Windows 11, development workstation. User profile `pheed`. Project root
 | Python | 3.12.10, machine scope. Launcher `py -3.12` |
 | venv | `C:\hub\.venv` |
 | venv python | `C:\hub\.venv\Scripts\python.exe` |
-| Renderer | `C:\hub\SumatraPDF.exe` plus its DLLs, portable |
+| Renderer | PDFium, via the `pypdfium2` wheel in the venv. No external exe |
 | Packages | flask, waitress, pywin32, pypdf, qrcode, reportlab, pypdfium2 |
 
 `pywin32_postinstall.py -install` has been run as admin. If `import
@@ -85,11 +85,12 @@ failure is visible by eye on a badge.
 `make-test-card.py` takes no arguments, despite what earlier notes claimed.
 The page size is the `W, H` constants at the top of the file.
 
-The SumatraPDF binaries and the venv are gitignored. SumatraPDF is GPLv3 and
-must not end up in the repo; PDFium arrives through the `pypdfium2` wheel in
-the venv. `.gitattributes` marks PDFs binary, because git guesses "text" for
-reportlab's small output and would corrupt the calibration card by
-converting its line endings.
+The venv is gitignored, and so are any leftover SumatraPDF binaries still
+sitting on the box: that renderer is GPLv3 and must never reach the repo.
+PDFium arrives through the `pypdfium2` wheel in the venv, so there is no
+renderer binary to manage any more. `.gitattributes` marks PDFs binary,
+because git guesses "text" for reportlab's small output and would corrupt
+the calibration card by converting its line endings.
 
 The calibration card carries a 1 mm ruler, a 100.00 mm horizontal caliper
 target, a 50.00 mm vertical target, a line width ladder from 0.1 to 2.0 pt, a
@@ -103,19 +104,14 @@ printer.
 | Variable | Meaning |
 |---|---|
 | `HUB_QUEUE` | print queue name. **Required.** The rig refuses to print without it |
-| `HUB_RENDERER` | `pdfium` or `sumatra`. Default `pdfium` |
-| `HUB_MEDIA` | value for SumatraPDF `paper=`. Empty means the queue default |
-| `HUB_COLOR` | `color` or `monochrome` |
-| `HUB_SUMATRA` | path to `SumatraPDF.exe` |
 | `HUB_DIR` | working directory. Default `C:\hub` |
 
-`HUB_MEDIA` and `HUB_COLOR` apply to the SumatraPDF path only. The PDFium
-path inherits the queue's own default DEVMODE, so there is nothing to pass
-per job. Honouring `monochrome` there means editing DEVMODE, which is task 2
-work. `HUB_SUMATRA` matters only for the bake-off.
-
-Keep `sumatra` selectable for the bake-off. Do not use it for cards: it
-cannot open the `HUB-CARD` queue at all. See below.
+That is the entire configuration surface. Rendering takes no per-job
+settings at all: the page is rendered at the device's own dpi and blitted
+1:1, and the DC is built from the queue's own default DEVMODE, so driver
+settings configured by hand are inherited. Colour and media are therefore
+properties of the queue, not of the rig. Selecting `monochrome` per job
+would mean editing DEVMODE, which is task 2 work.
 
 Routes: `/health`, `/printers`, `/print` (POST a PDF as form field `pdf`),
 `/jobs`, `/queue`.
@@ -127,8 +123,7 @@ $env:HUB_QUEUE = "HUB-PDF"
 C:\hub\.venv\Scripts\python.exe C:\hub\hub.py
 ```
 
-`HUB_RENDERER` defaults to `pdfium`, so that is all you need. Set
-`HUB_SUMATRA` only when running the bake-off.
+Those two lines are all you need.
 
 The process reads every variable once at start. Restart it after any change.
 Check `/health` and confirm `renderer` and `queue` read what you expect: a
@@ -158,12 +153,14 @@ started, and it answers with the old code.
    Windows 7, 8.1 and 10. Queue type is `Local`, which a LocalSystem service
    needs.
 2. The rig prints end to end against `HUB-PDF`: HTTP POST, spooled to disk,
-   rendered by SumatraPDF, accepted by the driver.
-3. SumatraPDF with `noscale` does not scale the page. Measured from the
-   `HUB-PDF` output at 600 dpi: the 120 mm ruler read 120.100 mm, the 100 mm
-   target 100.161 mm, the 50 mm target 50.165 mm. The error is constant at
+   rendered, accepted by the driver.
+3. Historical, measured before the renderer was replaced, and kept only
+   because it establishes the measurement floor on this box. From the
+   `HUB-PDF` output at 600 dpi the 120 mm ruler read 120.100 mm, the 100 mm
+   target 100.161 mm, the 50 mm target 50.165 mm. The error was constant at
    about 0.13 mm across all three lengths rather than proportional to length,
-   which is antialiasing at the measurement threshold, not scaling.
+   which is antialiasing at the measurement threshold, not scaling. Treat
+   roughly 0.1 mm as the noise floor for any measurement here.
 4. Nothing was clipped. The ink bounding box measured 134.03 x 82.04 mm
    against 134 x 82 mm authored.
 5. The Microsoft PDF driver rotated the landscape card 90° onto a portrait
@@ -236,10 +233,11 @@ One cost to carry into the product: PDFium runs **in-process**. A PDF that
 crashes it now takes down the agent, where SumatraPDF's subprocess gave that
 isolation for free. The shipped agent should render in a child process.
 
-Still open here: `monochrome` on the PDFium path, which needs DEVMODE work,
-and whether SumatraPDF fails on every third-party driver or only Zebra's.
-Installing the label printer from the later-tasks list answers the second
-one, and customer IT will hit whichever answer it is.
+Still open here: `monochrome`, which needs DEVMODE work.
+
+Worth a line in the memo regardless of which renderer ships. This
+uncertified driver defeated a widely used renderer completely, and gave a
+misleading error while doing it. Customer IT will meet the same driver.
 
 Do not burn more than one card per hypothesis. PVC costs real money. Test
 every change against `HUB-PDF` first.
@@ -255,19 +253,23 @@ public `DEVMODE` structure. No portable API reaches them. `caps.py` prints
 `DriverExtra`, which is the size of that blob in bytes. Above zero means this
 task is real work.
 
-Two constraints discovered already:
+What is known already:
 
 - **pywin32 exposes a `DEVMODE` object, not raw bytes.** Capture and replay
   needs a small `ctypes` layer over `DocumentProperties`: call it with mode 0
   to get the required buffer size, then with `DM_OUT_BUFFER` to fill a buffer
-  of that size, then write the raw bytes to disk.
-- **SumatraPDF cannot accept a DEVMODE blob.** It takes its own settings
-  string only. So per-job DEVMODE does not compose with it.
+  of that size, then write the raw bytes to disk. `caps.py` and
+  `pdfium_print.py` already do the reading half of this; the ZC10L reports
+  6056 bytes total, 5836 of them driver-private.
+- **The renderer inherits the queue default rather than taking a blob.**
+  `pdfium_print.py` builds its DC with a NULL DEVMODE, so it picks up
+  whatever the queue's default is. That is a convenience, not an obstacle:
+  there is no per-job plumbing to write.
 
-The way around the second constraint, and the preferred design: write the
-captured blob into the **queue's own default settings** with `SetPrinter`
-level 2. Every renderer then inherits it, SumatraPDF included. That keeps
-capture and replay as one problem instead of one problem per renderer.
+The preferred design: write the captured blob into the **queue's own default
+settings** with `SetPrinter` level 2. Every renderer then inherits it, which
+keeps capture and replay as one problem instead of one problem per renderer,
+and it is already how the current renderer picks up its settings.
 
 `SetPrinter` needs administrator or manage-printer rights, and it changes the
 queue globally. That is acceptable on a dedicated hub. Say so in the memo.
@@ -310,11 +312,11 @@ Take the early signal here.
 
 ## Later tasks, in order
 
-1. Finish the PDFium/SumatraPDF bake-off. Mostly settled already, and not on
-   licensing: SumatraPDF cannot print a card at all, so PDFium is the
-   default and the GPLv3 dependency is retired. What is left is a quality
-   comparison on the queues where both work, and the child-process
-   rendering question above.
+1. Move rendering into a child process. PDFium runs in-process today, so a
+   malformed PDF that crashes it takes the whole agent down. The renderer
+   choice itself is settled, so this is the last piece of it outstanding.
+   The bake-off is closed: the alternative could not print a card at all,
+   and the GPLv3 dependency is retired.
 2. Spike 4. Break the printer on purpose — card jam, empty hopper, ribbon
    out — and record what the spooler reports and how long it takes. Produce a
    written list split in two: conditions the agent can detect, and conditions
@@ -373,10 +375,10 @@ Take the early signal here.
   GDI DIBs require aligned rows, so force `FPDFBitmap_BGRx`.
 - Do not name a scratch script after a stdlib module. An `enum.py` beside
   the script shadowed `enum` and broke `win32timezone` deep inside pywin32.
-- File visibility is inconsistent under the agent sandbox. The SumatraPDF
-  binaries were listed by one call and reported absent by the next, and git
-  and Python cannot see them at all even though the exe runs. `sumatra_found`
-  in `/health` is therefore not evidence of anything.
+- File visibility is inconsistent under the agent sandbox. The leftover
+  SumatraPDF binaries were listed by one call and reported absent by the
+  next, and git and Python could not see them at all even while the exe was
+  running fine. Never conclude a file is missing from a single failed check.
 
 ## Reporting
 
