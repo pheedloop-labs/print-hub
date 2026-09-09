@@ -188,16 +188,35 @@ started, and it answers with the old code.
     `devmode.py` captures all 6056 bytes of `HUB-CARD`'s default, 5836 of
     them driver-private, and writes them back byte-identically with
     `SetPrinter` level 2. Proven on both queues.
-12. **`SetPrinter` level 2 does not need full administrator.** This shell is
+
+    Writes to the private region genuinely land. A byte-identical round trip
+    alone would not prove that, since writing the same bytes back is
+    indistinguishable from the write being ignored. Single-byte flips at
+    private offsets 0, 4, 100 and 1000 all persisted, which settles it.
+12. **A bad blob fails silently. This is the trap.** The ZC10L driver
+    validates the private region as a whole. Zero all 5836 bytes and the
+    driver discards the lot and substitutes its own, reporting success the
+    whole way. So a botched replay looks exactly like a good one from the
+    outside. Always read back and compare after applying; `devmode.py apply`
+    does this and prints before, wanted and after hashes.
+
+    This is also the answer to acceptance step 5. There is no visible
+    failure signature to teach the team, because the driver self-heals
+    rather than misprinting. Comfortable, but it hides mistakes, so the
+    read-back is the safeguard rather than anything a human can spot.
+13. The final private byte, offset 5835, is always rewritten by the driver.
+    Do not expect byte-exact replay of a hand-edited blob. A genuine
+    captured blob does round-trip exactly.
+14. **`SetPrinter` level 2 does not need full administrator.** This shell is
     not elevated and the write still succeeds, so manage-printer rights are
     enough. That matters for the deployment model: the hub does not have to
     run elevated to own its queue settings.
-13. Replay changes real rendering, not just stored bytes. Flipping
+15. Replay changes real rendering, not just stored bytes. Flipping
     `dmOrientation` on `HUB-PDF` moved the DC from 5100 x 6600 to
     6600 x 5100, and `pdfium_print.py` picked it up with no code change
     because it builds its DC with a NULL DEVMODE. Restoring the saved blob
     returned both the bytes and the geometry exactly.
-14. The ZC10L reports exactly one form: paperkind **276**, named
+16. The ZC10L reports exactly one form: paperkind **276**, named
     `140x88mm`, measuring 89.0 x 142.2 mm. Nothing near 139.7 x 88.9 mm
     exists. Custom forms are not a credible path: the driver claims a
     156.1 mm minimum length while its own only form is 142.2 mm long.
@@ -286,17 +305,37 @@ settings** with `SetPrinter` level 2. Every renderer then inherits it, which
 keeps capture and replay as one problem instead of one problem per renderer,
 and it is already how the current renderer picks up its settings.
 
-`SetPrinter` needs administrator or manage-printer rights, and it changes the
-queue globally. That is acceptable on a dedicated hub. Say so in the memo.
+`SetPrinter` changes the queue globally, which is acceptable on a dedicated
+hub. Say so in the memo. It turned out **not** to need administrator, only
+manage-printer rights, which is a better deployment story than assumed.
 
 Acceptance for this task:
 
 1. Configure the queue by hand in the vendor driver UI. Leave it correct.
-2. Capture the blob to disk. Print from code.
-3. Print the same PDF by hand from the driver dialog.
-4. A human measures both cards with calipers. They must match within 0.5 mm.
-5. Print once with the blob deliberately absent, so the team knows the
-   failure signature on sight.
+   **Done**, in the sense that matters: the queue is in a state that prints
+   correctly, verified by calipers, and the captured blob is that state.
+2. Capture the blob to disk. Print from code. **Done.** `devmode.py capture`,
+   then a card printed from code measuring 100.00 and 50.00 mm exactly.
+3. Print the same PDF by hand from the driver dialog. **Done**, by the
+   operator, before the renderer was replaced. Reported as correct.
+4. A human measures both cards with calipers, matching within 0.5 mm.
+   **Done**, both at 100.00 and 50.00 mm, so 0.00 mm apart. Note this step
+   is weaker than it looks: a code print and a hand print both read the same
+   queue default, so agreement is close to guaranteed and does not by itself
+   prove the vendor bytes replayed. Items 11 to 13 in Verified are what
+   actually prove that.
+5. Print once with the blob deliberately absent. **Answered without media,
+   and the answer is that this step cannot be performed as written.** The
+   driver refuses an invalid private region: zero the vendor bytes and it
+   silently substitutes its own and prints normally. There is no failure
+   signature to put in front of the team.
+
+What remains, and it needs a second genuinely valid configuration: prove
+that applying config A's private bytes while the queue sits at config B
+actually moves the queue to A. Single-byte flips prove the region is
+writable, but only the driver UI can produce a second blob that passes the
+driver's own validation. Change one vendor setting by hand, capture, then
+`devmode.py diff` the two blobs and apply each in turn.
 
 ## Open task 3 — Session 0 service test (spike 1, gating)
 
