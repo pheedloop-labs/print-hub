@@ -337,6 +337,21 @@ started, and it answers with the old code.
     That is the production condition, and item 24 independently rules out the
     per-user printer risk it could otherwise have masked.
 
+28. **Repeatable across restarts, a reboot and a remote caller.** Every card
+    printed through the pinned path came out the same: `pinned-card-1`,
+    `service-card-1` and `nologin-card-1` through `5`, spanning a service
+    reinstall, a `nssm restart`, a full reboot, and invocation from a
+    different machine. The operator reports them all identical.
+
+    The single card that differed was the deliberately unpinned one at zoom
+    105, which is the point. Same PDF, same code path, same printer; the only
+    variable that ever changed the output was the DEVMODE in force.
+
+    Read this as consistency rather than precision. Two cards were measured
+    with calipers at 100.00 and 50.00 mm; the rest were compared by eye
+    against those. That is the right level of rigour for a repeatability
+    check, but do not quote it as eight measured cards in the memo.
+
 ## Closed task 1 — the card print failed because of the renderer
 
 Resolved. Neither of the two hypotheses this file used to list was right. It
