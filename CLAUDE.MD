@@ -90,6 +90,8 @@ failure is visible by eye on a badge.
 | `devmode.py` | capture and replay a queue's DEVMODE, vendor bytes included |
 | `devmode\` | captured blobs. Restore points, not source. Gitignored |
 | `caps.py` | dumps a driver's paper names, paperkind ids, and DEVMODE defaults |
+| `spike4_monitor.py` | polls a queue and logs every state change, with timing |
+| `spike4-timeline.txt` | raw spike 4 timeline. Evidence for the memo |
 | `make-test-card.py` | generates the calibration card. Edit `W, H` at the top |
 | `test-card-140x88.pdf` | the current calibration card |
 | `spool\` | saved job PDFs. Safe to delete. Gitignored |
@@ -352,6 +354,16 @@ started, and it answers with the old code.
     against those. That is the right level of rigour for a repeatability
     check, but do not quote it as eight measured cards in the memo.
 
+29. **Spike 4 answered: four faults detectable, but only reactively.** Out
+    of cards, ribbon out, card jam and cover open all report distinct,
+    correctly attributed statuses within about a second of a job arriving.
+    Nothing reports anything while the queue is idle, including a jam with
+    the printer's error light on, so there is no truthful pre-flight check
+    and the agent can never promise "printer ready". A printer that is off
+    or unplugged is the one fault with no proper signal at all: only WMI
+    `WorkOffline`, after roughly 20 seconds, with no cause given. Full
+    detail, timings and implementation traps in Closed task 4.
+
 ## Closed task 1 — the card print failed because of the renderer
 
 Resolved. Neither of the two hypotheses this file used to list was right. It
@@ -579,6 +591,103 @@ with **no authentication**, so anything that can reach port 8080 can print a
 card. Acceptable in the lab; not acceptable on a venue network. Out of scope
 this week along with the transport, but it must not ship this way.
 
+## Closed task 4 — what the spooler reports when the printer breaks (spike 4)
+
+**Done.** Four faults induced deliberately on real hardware, with
+`spike4_monitor.py` polling three independent sources twice a second. The raw
+timeline is in `spike4-timeline.txt`.
+
+Two findings dominate, and neither was on the list of things this task set
+out to learn.
+
+### The queue is only truthful while a job is in flight
+
+Every consumable fault reported `Status 0x0`, WMI `Idle`, and `Get-Printer`
+**`Normal`** until a badge was actually sent. A card jam with the printer's
+own error light lit read as a perfectly healthy queue. Send one job and the
+correct fault appears in under a second.
+
+So **the agent cannot pre-flight the printer.** It can never truthfully tell
+an iPad "printer ready". It can only say "the badge you just sent failed,
+because X". No green light, only red ones, and only after somebody has
+already tried to print. That bounds the product promise more than anything
+else in this spike.
+
+### The agent cannot confirm a card exists
+
+A job clears the queue identically whether or not media emerged, in about
+two seconds either way. Nothing distinguishes a good badge from a mangled,
+blank or double-fed one. The rig also returned
+`{"state":"sent","dpi":300,"raster_mm":[140.039,88.053],"scale_pinned":true}`
+for a printer that was **physically unplugged**, correct geometry and all.
+
+Design rule 2 is now evidence rather than caution. `sent` is the only honest
+word available.
+
+### What the agent CAN detect and name
+
+Only while a job is in flight, except door open. Latency is from the POST
+arriving, measured against the spool file's mtime.
+
+| Condition | Spooler `Status` | WMI `DetectedErrorState` | Latency |
+|---|---|---|---|
+| Out of cards | `PAPER_OUT` `0x00000010` | `NoPaper` (4) | 0.7 s |
+| Ribbon out | `NO_TONER` `0x00040000` | `NoToner` (6) | 1.0 s |
+| Card jam | `PAPER_JAM` `0x00000008` | `Jammed` (8) | 0.9 s |
+| Cover open | `DOOR_OPEN` `0x00400000` | `DoorOpen` (7) | immediate, and visible while idle |
+
+Four distinct, correctly attributed causes. The iPad can name the actual
+problem to a desk rather than shrugging, which is a genuinely useful promise
+even though it is reactive.
+
+### What staff must catch by eye
+
+- **Printer powered off or unplugged.** The spooler `Status` field never
+  changes, not once, through disconnect, stuck job, reconnect and printing.
+  `PRINTER_STATUS_OFFLINE` exists in the API and is never set. The only
+  signal is WMI `WorkOffline` flipping true after about 20 seconds, and it
+  never says why. `Get-Printer` reports `Normal` throughout.
+- **Any fault at all while the queue is idle.** See above. An idle poll is
+  worthless.
+- **A badge that printed wrongly.** No signal exists, at all.
+- **Whether a card physically landed in the tray.**
+
+### Operational timings worth knowing
+
+- Recovery is automatic. The queued job prints itself once the fault clears;
+  nobody needs to resubmit.
+- Recovery latency splits in two. A hopper refill that does not open the main
+  cover completes in **1.4 s**. Anything that opens the main cover, so a jam
+  clear or a ribbon change, takes **34 to 40 s**, because the printer
+  re-initialises. **Do not raise an alarm in the first minute after a
+  cover-open fix**, or the agent will cry wolf on every ribbon change.
+- A job survived a printer being unplugged for over two minutes and printed
+  **2.3 s** after reconnect.
+- The whole print lifecycle is visible for roughly **1.4 s**. Poll slower
+  than about a second and the job's existence is missed entirely.
+
+### Traps for whoever implements this
+
+- **Job status lies. Poll printer status, not job status.** A job reads
+  `PRINTING|RETAINED` (`0x2010`) while the printer is jammed, empty or out of
+  ribbon. `pStatus` is always empty. Anything reading job state concludes the
+  badge is coming out right now.
+- **One condition at a time.** `PAPER_OUT` was *replaced* by `DOOR_OPEN`,
+  not OR-ed with it. Fixing the reported fault can simply reveal the next
+  one, so the agent cannot describe a compound failure.
+- **The event log is empty.** `PrintService/Admin` is enabled by default and
+  recorded **zero** events across every fault here.
+  `PrintService/Operational` is **disabled** by default and enabling it needs
+  elevation: `wevtutil sl "Microsoft-Windows-PrintService/Operational"
+  /e:true`. Do not plan on event-log-driven detection without turning it on
+  first and confirming it says anything useful.
+- **WMI `DetectedErrorState` is an activity artifact, not a health field.**
+  It reads `NoError` only while actively printing and reverts to `Unknown`
+  at idle, so `Unknown` does not mean healthy.
+- `/queue` already surfaces the printer `Status` integer, so the rig needs no
+  change to expose all of this. `status: 16` is out of cards, `8` jammed,
+  `262144` no ribbon, `4194304` cover open.
+
 ## Later tasks, in order
 
 1. Move rendering into a child process. PDFium runs in-process today, so a
@@ -586,11 +695,6 @@ this week along with the transport, but it must not ship this way.
    choice itself is settled, so this is the last piece of it outstanding.
    The bake-off is closed: the alternative could not print a card at all,
    and the GPLv3 dependency is retired.
-2. Spike 4. Break the printer on purpose — card jam, empty hopper, ribbon
-   out — and record what the spooler reports and how long it takes. Produce a
-   written list split in two: conditions the agent can detect, and conditions
-   staff must catch by eye. That list is what the iPad is allowed to promise a
-   registration desk.
 3. Make the dedupe log durable on disk with a 24 hour window. It is in memory
    today.
 4. Install a label printer driver (Brother QL-800 or DYMO 550) for cheap

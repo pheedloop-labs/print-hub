@@ -1,0 +1,139 @@
+# watching HUB-CARD every 0.5s. Ctrl-C to stop.
+# started 2026-09-09T16:07:15
+# only changes are printed. elapsed seconds in brackets.
+
+[    0.37s] 16:07:15.424
+    printer : 0x00000000  (none)
+    wmi     : status=Idle error=Unknown ext=0 offline=False
+    queued  : 0
+
+[   19.95s] 16:07:35.005
+    printer : 0x00000000  (none)
+    wmi     : status=Idle error=Unknown ext=0 offline=True
+    queued  : 0
+
+[   68.26s] 16:08:23.316
+    printer : 0x00000000  (none)
+    wmi     : status=Unknown error=Unknown ext=0 offline=True
+    queued  : 0
+
+[   68.96s] 16:08:24.013
+    printer : 0x00000000  (none)
+    wmi     : status=Unknown error=Unknown ext=0 offline=True
+    queued  : 1
+    job 3 status=(none) pStatus='' pages=0/1
+
+[  188.40s] 16:10:23.457
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=True
+    queued  : 1
+    job 3 status=(none) pStatus='' pages=0/1
+
+[  189.32s] 16:10:24.376
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 1
+    job 3 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[  190.74s] 16:10:25.798
+    printer : 0x00000000  (none)
+    wmi     : status=Idle error=Unknown ext=0 offline=False
+    queued  : 0
+
+[  286.20s] 16:12:01.251
+    printer : 0x00000010  PAPER_OUT
+    wmi     : status=Other error=NoPaper ext=4 offline=False
+    queued  : 1
+    job 4 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[  372.72s] 16:13:27.776
+    printer : 0x00400000  DOOR_OPEN
+    wmi     : status=Other error=DoorOpen ext=7 offline=False
+    queued  : 1
+    job 4 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[  389.78s] 16:13:44.835
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 1
+    job 4 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[  390.45s] 16:13:45.507
+    printer : 0x00000000  (none)
+    wmi     : status=Idle error=Unknown ext=0 offline=False
+    queued  : 1
+    job 4 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[  391.22s] 16:13:46.275
+    printer : 0x00000000  (none)
+    wmi     : status=Idle error=Unknown ext=0 offline=False
+    queued  : 0
+
+[  521.71s] 16:15:56.761
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 0
+
+[  522.38s] 16:15:57.429
+    printer : 0x00040000  NO_TONER
+    wmi     : status=Other error=NoToner ext=6 offline=False
+    queued  : 1
+    job 5 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[  623.16s] 16:17:38.211
+    printer : 0x00400000  DOOR_OPEN
+    wmi     : status=Other error=DoorOpen ext=7 offline=False
+    queued  : 1
+    job 5 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[  636.84s] 16:17:51.893
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 1
+    job 5 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[  677.18s] 16:18:32.231
+    printer : 0x00000000  (none)
+    wmi     : status=Idle error=Unknown ext=0 offline=False
+    queued  : 0
+
+[  802.51s] 16:20:37.564
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 1
+    job 6 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[  804.74s] 16:20:39.792
+    printer : 0x00000000  (none)
+    wmi     : status=Idle error=Unknown ext=0 offline=False
+    queued  : 0
+
+[  875.11s] 16:21:50.165
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 1
+    job 7 status=SPOOLING pStatus='' pages=0/0
+
+[  875.78s] 16:21:50.835
+    printer : 0x00000008  PAPER_JAM
+    wmi     : status=Other error=Jammed ext=8 offline=False
+    queued  : 1
+    job 7 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[  942.27s] 16:22:57.322
+    printer : 0x00400000  DOOR_OPEN
+    wmi     : status=Other error=DoorOpen ext=7 offline=False
+    queued  : 1
+    job 7 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[  945.93s] 16:23:00.981
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 1
+    job 7 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[  980.17s] 16:23:35.218
+    printer : 0x00000000  (none)
+    wmi     : status=Idle error=Unknown ext=0 offline=False
+    queued  : 0
+
