@@ -273,6 +273,18 @@ started, and it answers with the old code.
     accept a DEVMODE blob at all, which is exactly why the old notes reached
     for the queue-default design that this driver defeats. Dropping it is
     what makes this task solvable, not just a licensing convenience.
+21. **The pin works end to end on media, against a hostile queue.** With the
+    driver UI holding zoom 105, so that an unpinned job would have taken
+    315 dpi and printed 5% oversized, a card posted through the rig with
+    `HUB_DEVMODE` set used 300 dpi and measured **100.00 mm and 50.00 mm**
+    on the two targets. The queue default was still 105 afterwards: the pin
+    overrides, it does not repair the queue, which is the only approach that
+    survives this driver's re-assertion.
+
+    Keep the two cards together. The 105 card and this one came off the same
+    PDF, so the only difference between them is the DEVMODE. That pair is
+    the demonstration for the memo: a vendor UI setting can silently defeat
+    scale, and a pinned blob defeats it back.
 
 ## Closed task 1 — the card print failed because of the renderer
 
@@ -329,11 +341,18 @@ misleading error while doing it. Customer IT will meet the same driver.
 Do not burn more than one card per hypothesis. PVC costs real money. Test
 every change against `HUB-PDF` first.
 
-## Open task 2 — DEVMODE capture and replay (spike 2, gating)
+## Closed task 2 — DEVMODE capture and replay (spike 2)
 
-The goal: store a fully configured driver settings blob and apply it to every
-job, so a print from code matches a print configured by hand in the vendor
-driver UI within 0.5 mm, with every vendor-specific option honoured.
+**Done, and the answer is stronger than the question.** Capture and replay of
+the vendor-private bytes works, and it turned out to be mandatory rather than
+merely nice: without it a setting in the driver UI silently changes printed
+size. The gate is passed.
+
+The goal was: store a fully configured driver settings blob and apply it to
+every job, so a print from code matches a print configured by hand in the
+vendor driver UI within 0.5 mm, with every vendor-specific option honoured.
+Measured result: 0.00 mm apart on both targets, with the queue deliberately
+left misconfigured to make the test mean something.
 
 Vendor-private driver settings live in the `dmDriverExtra` bytes after the
 public `DEVMODE` structure. No portable API reaches them. `caps.py` prints
@@ -348,10 +367,11 @@ What is known already:
   of that size, then write the raw bytes to disk. `caps.py` and
   `pdfium_print.py` already do the reading half of this; the ZC10L reports
   6056 bytes total, 5836 of them driver-private.
-- **The renderer inherits the queue default rather than taking a blob.**
-  `pdfium_print.py` builds its DC with a NULL DEVMODE, so it picks up
-  whatever the queue's default is. That is a convenience, not an obstacle:
-  there is no per-job plumbing to write.
+- **With no blob given, the renderer inherits the queue default.**
+  `pdfium_print.py` builds its DC with a NULL DEVMODE in that case, which
+  looked like a convenience and is in fact the hazard: the queue default is
+  exactly what a driver UI setting changes under you. Pass `--devmode`, or
+  `HUB_DEVMODE` for the rig, and the blob wins instead.
 
 **The design changed, because the old one does not work here.** Writing the
 captured blob into the queue's own default with `SetPrinter` level 2 was the
@@ -383,30 +403,41 @@ Acceptance for this task:
    queue default, so agreement is close to guaranteed and does not by itself
    prove the vendor bytes replayed. Items 11 to 13 in Verified are what
    actually prove that.
-5. Print once with the blob deliberately absent. **Answered without media,
-   and the answer is that this step cannot be performed as written.** The
-   driver refuses an invalid private region: zero the vendor bytes and it
-   silently substitutes its own and prints normally. There is no failure
-   signature to put in front of the team.
+5. Print once with the blob deliberately absent, for the failure signature.
+   **Done, and there is one after all**, though not the way this step
+   imagined. Zeroing the vendor bytes produces nothing to look at: the
+   driver rejects an invalid private region, silently substitutes its own
+   and prints normally, so that route has no signature and cost no media to
+   rule out. The real signature came from the zoom setting: with the driver
+   UI at 105 and no blob pinned, the card prints **5% oversized** while
+   every number the rig reports still looks right.
 
-Cross-config replay is **proven**, using `Zoom-in/out[Z]` at 100 and 105 as
-the two configurations. See Verified item 17. The scale question is settled
-too, on PVC: 105% really does print 5% oversized, so pinning a blob is
-**mandatory**, not optional. See items 18 to 20.
+   That is the card to show the team. It is what a lost blob looks like, and
+   it looks like nothing at all until you measure it.
 
-What remains: one card printed through the rig with `HUB_DEVMODE` set while
-the queue default sits at 105, to confirm end to end on media what the
-device caps already show. The zoom is currently 105 in the driver UI, which
-makes this the ideal moment: an unpinned print is known to come out wrong,
-so a correct card proves the pin is doing the work.
+**Task 2 is closed.** Cross-config replay is proven, using
+`Zoom-in/out[Z]` at 100 and 105 as the two configurations (Verified 17). The
+scale question is settled on PVC (Verified 18). The queue-default design was
+found not to hold on this driver and was replaced with per-job DEVMODE
+(Verified 19 and 20). The pin was then confirmed end to end against a
+deliberately misconfigured queue: 100.00 and 50.00 mm (Verified 21).
+
+Carry into the product: **the agent must pin a captured blob per job.**
+Inheriting the queue default is not safe on this hardware, and the failure
+is silent. `HUB_DEVMODE` does this today, and `/health` reports
+`scale_pinned` so the condition is visible without printing anything.
 
 Restore points live in `devmode\`, gitignored:
 
 | file | contents |
 |---|---|
-| `HUB-CARD.restore.devmode` | zoom 100, the known-good config. Prints correctly |
+| `HUB-CARD.restore.devmode` | zoom 100, the known-good config. Pin this one |
 | `HUB-CARD.zoom105.devmode` | zoom 105, kept as the second config for replay tests |
 | `HUB-PDF.restore.devmode` | the `HUB-PDF` default |
+
+These are restore points on this box, not source, and they are gitignored.
+A fresh machine needs its own captures: the vendor bytes are opaque and
+`pdfium_print` refuses a blob taken from a different queue.
 
 The queue is currently left at the zoom 100 blob. Put it back there after
 any experiment, because 105% may misprint every card.
