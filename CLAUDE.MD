@@ -311,6 +311,14 @@ started, and it answers with the old code.
     `PER_USER` attribute is clear, and `HKCU\Printers\Connections` is empty.
     So the queue a logged-in user sees is the queue the service sees, which
     is what spike 1 needed and is confirmed by item 22 actually printing.
+25. **A different computer on the network can drive the hub.** `curl` from
+    another machine POSTed a PDF to `http://192.168.1.30:8080/print` and a
+    card came out. Inbound 8080 needs an explicit firewall rule and a
+    locally created one works. This is the transport half of the product
+    proven with no cloud involved at all.
+26. `/printers` answers `queue_visible: true` from the service itself, so the
+    per-user question is settled by the service rather than by inference from
+    the registry.
 
 ## Closed task 1 — the card print failed because of the renderer
 
@@ -470,30 +478,70 @@ any experiment, because 105% may misprint every card.
 
 ## Open task 3 — Session 0 service test (spike 1, gating)
 
-Register the rig as a Windows service running as `LocalSystem` with `nssm`,
-then print with nobody logged in.
+Mostly done, and the remaining piece is the one that matters. The service
+exists, runs as `LocalSystem`, sees the printers, and prints on demand from
+another machine on the network. **What is still untested is the actual gate:
+printing with nobody logged in.**
+
+| Thing | Status |
+|---|---|
+| `nssm.exe` | installed at `C:\hub\nssm.exe`, deliberately not on PATH |
+| `PheedLoopHub` | RUNNING, `StartName` = `LocalSystem`, start = Auto |
+| machine-scope `HUB_*` | reaches the service, `/health` confirms it |
+| `/printers` from the service | `queue_visible: true` |
+| printing as `LocalSystem` | works |
+| printing from another machine | works, `curl` to `192.168.1.30:8080` |
+| printing with nobody logged in | **not yet tested** |
+
+The sequence that got here, for rebuilding on the next box:
 
 ```
-nssm install PheedLoopHub "C:\hub\.venv\Scripts\waitress-serve.exe" ^
-      "--listen=0.0.0.0:8080" "hub:app"
-nssm set PheedLoopHub AppDirectory C:\hub
-nssm set PheedLoopHub ObjectName LocalSystem
-nssm start PheedLoopHub
+[Environment]::SetEnvironmentVariable("HUB_QUEUE",   "HUB-CARD", "Machine")
+[Environment]::SetEnvironmentVariable("HUB_DEVMODE", "C:\hub\devmode\HUB-CARD.restore.devmode", "Machine")
+[Environment]::SetEnvironmentVariable("HUB_DIR",     "C:\hub", "Machine")
+
+New-NetFirewallRule -DisplayName "PheedLoop Hub 8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Any
+
+C:\hub\nssm.exe install PheedLoopHub "C:\hub\.venv\Scripts\waitress-serve.exe" "--listen=0.0.0.0:8080" "hub:app"
+C:\hub\nssm.exe set PheedLoopHub AppDirectory C:\hub
+C:\hub\nssm.exe set PheedLoopHub ObjectName LocalSystem
+C:\hub\nssm.exe set PheedLoopHub Start SERVICE_AUTO_START
+C:\hub\nssm.exe set PheedLoopHub AppStdout C:\hub\service.log
+C:\hub\nssm.exe set PheedLoopHub AppStderr C:\hub\service.log
+C:\hub\nssm.exe set PheedLoopHub AppRotateFiles 1
+C:\hub\nssm.exe start PheedLoopHub
 ```
 
-`nssm` is not yet installed. Get it from nssm.cc and put `nssm.exe` on the
-PATH.
+Order matters. Set the variables **before** starting the service, because it
+reads them once. `HUB_DEVMODE` especially: a service that starts without it
+inherits the queue default and prints silently wrong-sized cards, per
+Verified 18. A code change needs `nssm restart`, not merely a new request.
 
-Set the `HUB_*` variables machine-wide before you register the service. A
-service does not inherit a shell's variables. Use
-`[Environment]::SetEnvironmentVariable(name, value, "Machine")`.
+### What is left
 
-Then hit `/printers` from the service and compare the list against the list
-you get as `pheed`. A queue that appears for the user but not for LocalSystem
-is a per-user queue, and that changes the process model.
+Reboot and **do not log in**.
 
-The full no-login reboot test belongs on the mini PC, not this workstation.
-Take the early signal here.
+The attempt so far does not count, and it is worth recording why rather than
+assuming it passed. The box booted at 15:17:08 and `pheed` logged in at
+15:17, so an interactive session was present for every print to date,
+including the one driven from another machine. That proves a `LocalSystem`
+service prints and is reachable over the network, which is most of the task.
+It does not prove Session 0 with no user, which is the whole point of the
+gate.
+
+`AutoAdminLogon` is `0`, so the machine will genuinely sit at the lock
+screen. The test is possible here.
+
+Then, from another machine, with the card PDF copied over:
+
+```
+curl.exe -s -X POST -F "pdf=@test-card-140x88.pdf" "http://192.168.1.30:8080/print?job_id=nologin-card-1"
+```
+
+That card is the gate. Until it exists, spike 1 is unproven however
+promising everything above it looks. Check `service.log` afterwards: it
+rotates on every service start, so a fresh "Serving on" line stamped at boot
+time is independent evidence the service came up with no user present.
 
 ## Later tasks, in order
 
