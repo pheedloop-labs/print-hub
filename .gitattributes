@@ -1,0 +1,4 @@
+# The calibration card is a measurement instrument. Line-ending conversion
+# would corrupt it, and git guesses "text" for reportlab's small PDFs.
+*.pdf binary
+*.prn binary

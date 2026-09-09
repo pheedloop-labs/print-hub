@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Local tool state, not shared
+.claude/settings.local.json
+
+# Renderer binaries. Provisioned on the box, never committed.
+# SumatraPDF is GPLv3 and is a spike accelerator only; PDFium arrives via
+# the pypdfium2 wheel in the venv, so neither belongs in the repo.
+SumatraPDF.exe
+libmupdf.dll
+PdfFilter.dll
+PdfPreview.dll
+SumatraPDF-settings.txt
+sumatra/
+
+# Print artifacts, all regenerated on demand.
+# spool/ holds delivered job PDFs; out.pdf is the HUB-PDF file port target
+# and is overwritten by every print.
+spool/
+out.pdf
+*.prn
