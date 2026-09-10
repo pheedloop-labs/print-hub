@@ -520,6 +520,67 @@ started, and it answers with the old code.
     dominant". A badge author needs that answer, because under the second
     rule magenta silently becomes red.
 
+38. **The Brother driver raises a modal dialog in the print path, and it is
+    the only recovery route. This is a deployment blocker, and it is the
+    driver's doing, not ours.** Sequence, measured:
+
+    | t | event |
+    |---|---|
+    | idle, cover open | `Status 0x0`, WMI `Idle`, `Get-Printer` **Normal** |
+    | POST + 2.1 s | job appears, `PRINTING\|RETAINED`, printer still `0x0` |
+    | POST + 3.3 s | printer `0x00000002` **ERROR**, job `PAUSED\|ERROR\|PRINTING\|RETAINED` |
+    | cover closed | **no state change at all for 45 s.** Job stays paused |
+    | operator clicks Resume in the dialog | label prints immediately |
+
+    Closing the cover does not recover the job. Only the dialog's Resume
+    button did. So on a LocalSystem service in Session 0 there is no desktop
+    to show that dialog and nobody to click it, and a cover-open leaves the
+    job hung with no recovery path and no diagnosis. Design rule 5 says a
+    dialog on a headless box is an outage; here the outage is imported with
+    the driver and cannot be switched off from our side.
+
+    Whether `SetJob` with `JOB_CONTROL_RESUME` substitutes for the click is
+    the open question that decides if this is survivable. See task 5.
+
+39. **The dialog names the fault in plain English while the API returns
+    `Other`.** The popup read:
+
+    ```
+    61mm Continuous Length Tape - ql800-coveropen 62mm  Cover open.
+    ```
+
+    At that exact moment `DetectedErrorState` was `Other` (1),
+    `ExtendedDetectedErrorState` was 1, and `ErrorDescription` was **empty**.
+
+    So `Other` is not the driver failing to know. The driver knows, and
+    routes the answer to a human on a screen instead of to the status API.
+    On a headless box that information is destroyed rather than merely
+    unavailable, which is worse than the ZC10L's silence: the ZC10L at least
+    named `DOOR_OPEN` through the API.
+
+40. **Fault attribution does not generalize, and the two drivers hide the
+    truth in opposite places.**
+
+    | | Zebra ZC10L | Brother QL-800 |
+    |---|---|---|
+    | cover open while **idle** | `DOOR_OPEN`, visible | nothing, reports `Normal` |
+    | printer `Status` with a job | `DOOR_OPEN`, named | `ERROR`, generic |
+    | job `Status` with a job | `PRINTING\|RETAINED`, lied | `PAUSED\|ERROR\|...`, flags it |
+    | recovery | automatic, job reprints | needs a dialog click |
+    | latency | ~1 s | ~3.3 s |
+
+    Two memo claims fall as a result. The ZC10L's cover-open was the single
+    fault visible while idle, so it was the only pre-flight signal that
+    existed anywhere; it is Zebra-specific, and the Brother has none. And
+    the promise that "the iPad can name the actual problem to a desk" is
+    Zebra-specific too: on the Brother the agent can only say that it
+    failed.
+
+    Revise the implementation trap accordingly. CLAUDE.md said "job status
+    lies, poll printer status". On the Brother it is the *job* status that
+    carries the error bit the printer status will not name. **Read both,
+    trust neither alone.**
+
 ## Closed task 1 — the card print failed because of the renderer
 
 Resolved. Neither of the two hypotheses this file used to list was right. It

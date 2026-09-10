@@ -1,0 +1,21 @@
+# watching Brother QL-800 every 0.5s. Ctrl-C to stop.
+# started 2026-09-10T08:26:11
+# only changes are printed. elapsed seconds in brackets.
+
+[    0.92s] 08:26:12.277
+    printer : 0x00000000  (none)
+    wmi     : status=Idle error=Unknown ext=0 offline=False
+    queued  : 0
+
+[   60.42s] 08:27:11.783
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 1
+    job 10 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[   61.65s] 08:27:13.012
+    printer : 0x00000002  ERROR
+    wmi     : status=Other error=Other ext=1 offline=False
+    queued  : 1
+    job 10 status=PAUSED|ERROR|PRINTING|RETAINED pStatus='' pages=1/0
+
