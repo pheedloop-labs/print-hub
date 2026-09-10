@@ -14,6 +14,13 @@ folder is throwaway. Do not grow it into the product. Do not add
 abstractions, a plugin system, a database, or a web UI. If a change does not
 help answer one of the eight memo questions, do not make it.
 
+Read that as scheduling, not as a product decision. The web interface in
+particular is **deferred, not rejected**: the operator considers it fully
+relevant and likely necessary in the finished product. It is banned here
+because building it this week would answer no memo question and would cost
+attention the Windows print path needs. See the out-of-scope list for the
+job it will do.
+
 Full spike plan, including the eight questions and the day-by-day sequence:
 https://claude.ai/code/artifact/a107db7a-78a7-4e59-8bc1-d917c5537ca4
 
@@ -706,8 +713,16 @@ even though it is reactive.
   print path. Add the transport in week two when it is the only thing left.
 - Reverse-engineering the Canon CX-G6400 wire format. A firmware update would
   own us. That printer is not on the desk yet anyway.
-- The headless bootstrap ladder and the Wi-Fi hotspot rung. They need the
-  mini PC.
+- The headless bootstrap ladder and the Wi-Fi hotspot rung. Earlier notes
+  deferred these to "the mini PC", which is this box, so the hardware
+  blocker is gone and only the week's sequencing defers them now.
+- **The web interface. Deferred, not rejected.** It is expected in the
+  finished product, and spike 4 gave it a concrete job: the agent can never
+  pre-flight the printer, so staff need a surface that shows the last job's
+  fault rather than a green light that cannot exist. `/queue` already
+  returns the printer `Status` integer, so the data is in hand whenever
+  product work picks this up. Nothing about it answers a memo question, so
+  it waits.
 - Any decision on C# against Python. That decision waits until the first
   three spikes finish, with maintainership as the tiebreaker.
 
