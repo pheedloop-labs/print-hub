@@ -57,6 +57,8 @@ win32print` fails, run it again from an admin shell.
 |---|---|---|
 | `HUB-CARD` | USB001 | the Zebra ZC10L. Driver `Zebra ZC10L USB Card Printer` |
 | `HUB-PDF` | `C:\hub\out.pdf` | silent PDF target. Costs no media |
+| `Brother QL-800` | USB003 | DK label roll, 62 mm continuous. Cheap paper tests |
+| `EPSON CW-C4000u` | USB002 | colour inkjet label roll, 108 mm. Badge-capable |
 | `Microsoft Print to PDF` | `PORTPROMPT:` | never use. It opens a save dialog |
 
 `HUB-PDF` is a second queue on the Microsoft PDF driver, bound to a file
@@ -370,6 +372,65 @@ started, and it answers with the old code.
     or unplugged is the one fault with no proper signal at all: only WMI
     `WorkOffline`, after roughly 20 seconds, with no cause given. Full
     detail, timings and implementation traps in Closed task 4.
+
+30. **The vendor-private region is universal, not a ZC10L quirk.** Every
+    driver on this box reports a non-zero `dmDriverExtra`, spanning two
+    orders of magnitude:
+
+    | driver | public | private | total |
+    |---|---|---|---|
+    | Brother QL-800 | 220 | 320 | 540 |
+    | Zebra ZC10L | 220 | 5836 | 6056 |
+    | EPSON CW-C4000u | 220 | 30320 | 30540 |
+
+    So capture and replay is product work rather than a tax this one
+    uncertified driver imposes. Nothing can be configured portably on any of
+    them. Note the Epson blob is 30 KB, which is large to carry per job but
+    not a problem.
+31. **The ten-second revert is ZC10L-specific.** Verified 19 found that a
+    `SetPrinter` write to the queue default is re-asserted away by the ZC10L
+    within about ten seconds. Brother and Epson both **held** the same write,
+    a `dmCopies` flip, for 25 s with no drift.
+
+    Read this carefully, because it narrows a claim rather than overturning
+    a decision. Per-job DEVMODE stays the right design: it is the only one
+    that works on all three drivers, and one code path beats two. But the
+    reason is "the ZC10L defeats the queue default, and the agent must
+    support the ZC10L", not "the queue default cannot be made to stick on
+    Windows". The memo said the latter.
+32. **Public `dmScale` is inert on every driver here.** Setting `dmScale` to
+    105 or 50, with `DM_SCALE` set in `dmFields`, and handing the blob to
+    `CreateDC` changed no reported geometry at all on Brother, Epson,
+    ZC10L or the Microsoft PDF driver: same dpi, same pixel counts, same
+    millimetres.
+
+    A negative finding that matters twice. Product code that tries to scale
+    through `dmScale` will silently do nothing. And the ZC10L's zoom, which
+    provably does scale output (Verified 18), therefore lives entirely in
+    the driver-private bytes. The scale hazard is reachable by no portable
+    API, so pinning the private region is the only defence available on any
+    driver.
+33. **The Brother has unprintable margins. The other two do not.** Its
+    physical page is 1061 x 342 px against an imageable 991 x 306, at a
+    physical offset of 35, 18 px: about 2.96 mm at the left and 1.52 mm at
+    the top, at 300 dpi. `HUB-CARD` and the Epson both report offset 0, 0
+    with physical equal to imageable.
+
+    So a full-bleed badge is impossible on the QL-800 and fine on the other
+    two. `pdfium_print` centres within the imageable area, so it stays
+    correct here, but any layout that assumes bleed does not travel.
+34. Media models differ far more than the drivers do. Form counts are 1 for
+    the ZC10L, 3 for the Epson and **58** for the Brother, which includes a
+    literal `Visitor Name Badge Label` at 62 x 99.8 mm, paperkind 322. The
+    Brother reports `colordevice 0`, so the QL-800's black-and-red DK media
+    is not exposed as a colour device at all. The Epson reports
+    `colordevice 1` at 600 dpi on a 108 mm roll, which makes it the only
+    badge-capable colour device on the desk.
+
+    Every driver's dpi and millimetre claims agree with each other at rest,
+    within 0.4 mm. The disagreement in Verified 18 appears only when a
+    vendor scale setting is engaged, so a consistency check is a valid
+    detector but not a passive one.
 
 ## Closed task 1 — the card print failed because of the renderer
 
@@ -704,8 +765,9 @@ even though it is reactive.
    and the GPLv3 dependency is retired.
 3. Make the dedupe log durable on disk with a 24 hour window. It is in memory
    today.
-4. Install a label printer driver (Brother QL-800 or DYMO 550) for cheap
-   colour and text checks on paper instead of PVC.
+4. **Done.** The Brother QL-800 and EPSON CW-C4000u are both installed, so
+   text and colour checks no longer cost PVC. A Zebra ZD621 and a DYMO 550
+   Turbo are also on the desk, not yet installed.
 
 ## Explicitly out of scope this week
 
