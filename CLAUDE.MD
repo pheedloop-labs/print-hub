@@ -926,6 +926,28 @@ started, and it answers with the old code.
     `PAUSED|ERROR`. So even the shape of a stuck job differs, and a
     detector keyed on `JOB_STATUS_PAUSED` would miss this one entirely.
 
+    **The dialog channel inverts between the two vendors, and the DYMO
+    picks the right one.** A dialog appeared on the DYMO too, briefly, and
+    the operator reports it said only "error".
+
+    | | dialog says | API says |
+    |---|---|---|
+    | Brother QL-800 | **"Cover open."**, specific | `Other (1)`, `pStatus` empty |
+    | DYMO 550 | "error", generic | **"Unknown label detected"** |
+
+    So neither vendor is better across the board; they choose different
+    channels for the same information. But for a headless agent **the DYMO
+    is the better citizen**, because the useful text is in the API where
+    code can read it rather than on a screen in a session nobody is
+    watching. Worth saying plainly, because the DYMO is also the printer
+    that refused to print, and it would be easy to score it as the worst of
+    the five on that basis alone.
+
+    The DYMO dialog also dismissed itself rather than blocking, unlike the
+    Brother's, which persisted and held the only working recovery. The job
+    stayed stuck either way, so on the DYMO the dialog is not the recovery
+    mechanism and is closer to a notification.
+
 51. **The DYMO has the worst unprintable margins of the five.** Physical
     694 x 1200 px against an imageable 665 x 1112 at 300 dpi, at an
     asymmetric offset of 17, 70: **1.44 mm at the left and 5.93 mm at the
