@@ -131,6 +131,9 @@ captured blob rather than by any portable field.
 | `devmode\` | captured blobs. Restore points, not source. Gitignored |
 | `caps.py` | dumps a driver's paper names, paperkind ids, and DEVMODE defaults |
 | `spike4_monitor.py` | polls a queue and logs every state change, with timing |
+| `benchmark.py` | one objective row per queue. `author_mm` is the useful field |
+| `stress_all.py` | prints to every printer at once and times the spooler |
+| `printer-benchmark.html` | the bench record, five printers compared |
 | `spike4-timeline.txt` | raw spike 4 timeline. Evidence for the memo |
 | `make-test-card.py` | generates a calibration card at any page size |
 | `test-card-140x88.pdf` | calibration card for `HUB-CARD`, the ZC10L |
@@ -1001,6 +1004,56 @@ started, and it answers with the old code.
     target**, since their spacing is an exact known distance. No ruler,
     because on a page that narrow it would have to cross the vertical
     target. It reports which layout it used.
+
+54. **Concurrency works. Five printers at once, no serialisation, no
+    cross-queue interference.** All five launched within an 18 ms skew, all
+    exited 0, and each rendered its own correctly sized page with its own
+    pinned blob in its own process.
+
+    | measure | dry run | live |
+    |---|---|---|
+    | wall clock | 1.037 s | **2.119 s** |
+    | sum of individual times | 4.226 s | 7.232 s |
+    | effective parallelism | 4.1x | **3.4x** |
+
+    Per-job cost under load, against the same job run alone: Epson 1.35 s
+    to 2.12 s, ZD621 0.79 s to 1.50 s, DYMO 0.67 s to 1.20 s. So **roughly
+    1.6x to 1.9x slower per job with five in flight, for 3.4x aggregate
+    throughput.** Contention is real and modest, and the Epson's
+    17.2-megapixel page is always the long pole.
+
+    Nothing in the spooler serialised the work and no queue interfered with
+    another. `stress_all.py` runs it, with `--dry-run` to exercise the whole
+    concurrent path for free.
+
+    Worth knowing for a venue: five badge stations firing in the same second
+    cost about two seconds of wall clock, not ten.
+
+55. **Offline is invisible on the Brother too. The spike 4 finding
+    generalises, and it cost nothing to confirm.** Four of the five printed;
+    the Brother did not, because the operator had moved it to a different
+    USB port. The symptom was an exact reproduction of Closed task 4's worst
+    detection gap, on a different vendor:
+
+    | source | reading |
+    |---|---|
+    | `Get-Printer` | **`Normal`** |
+    | spooler `Status` | `0x0`, never changes. `PRINTER_STATUS_OFFLINE` never set |
+    | job `Status` | **`(none)`** — zero bits, not even `RETAINED` |
+    | job `pStatus` | empty |
+    | WMI `WorkOffline` | **`True`** — the only signal that exists |
+
+    Held for 30 s of polling with no change. The queue was still bound to
+    `USB003` and Windows created no new port, so the device was not seen at
+    all.
+
+    Two things to carry. **A job with zero status bits is the offline
+    signature**, and it is distinct from the `PAUSED|ERROR` of a real fault,
+    so a detector must treat "queued, no bits, not progressing" as its own
+    case. And `pdfium_print` returned **exit 0 with correct geometry to
+    0.01 mm for a printer that was not connected**, which is the third
+    independent time this spike has produced a perfect success report for a
+    badge that does not exist. Design rule 2 needs no further defence.
 
 ## Closed task 1 — the card print failed because of the renderer
 
