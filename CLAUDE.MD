@@ -599,11 +599,22 @@ started, and it answers with the old code.
     roll simply could not feed. That the next job printed does not settle it
     either, because a feed attempt can seat a roll.
 
-    Re-run it with **cover open** as the fault instead. Opening and closing
-    the cover never disturbs the media, so the seating variable disappears
-    and the result means what it says. Media-out was the wrong fault to test
-    a recovery path with, because it perturbs the one thing that decides
-    whether a label can physically emerge.
+    **The re-run with cover open gave the same result, and there is no
+    clean fault available on this printer.** Opening the cover makes the
+    QL-800 **retract the tape**, so the media has to be reloaded afterwards
+    and is not under the head when a recovery is attempted. Cover-open,
+    media-out and every other fault therefore share the same confound, and
+    no induced fault leaves the media undisturbed. Only a USB disconnect
+    would, and that may not pause the job at all.
+
+    So stop trying to isolate the fault and explain the mechanism instead,
+    because the data already contains the answer. A **fresh** job prints
+    normally after a reload; a **resumed** job never does. A fresh job makes
+    the driver re-feed and calibrate. `SetJob` `JOB_CONTROL_RESUME` releases
+    the spooler's job without telling the driver to feed anything, so there
+    is no media under the head and the page is discarded. The dialog's
+    button and the API call act at different layers, which is why one works
+    and the other does not.
 
     What rides on the answer, which is why it is worth another label. If
     resume recovers the job, the QL-800 is usable headless provided the
@@ -614,8 +625,20 @@ started, and it answers with the old code.
     Those are opposite conclusions, so do not carry either into the memo
     until the clean run is done.
 
-    Also untested: `JOB_CONTROL_RESTART`, documented to reprint from the
-    beginning, which may be what the dialog's button actually maps to.
+    Two candidates follow from that mechanism, in order of preference:
+
+    - `JOB_CONTROL_RESTART`, documented to reprint from the beginning, which
+      may re-drive the driver rather than merely release the job.
+    - **Delete the stuck job and submit a fresh one.** This is what the
+      product should do regardless of the answer above. The agent holds the
+      badge PDF, a fresh job demonstrably re-feeds, and resubmission needs
+      no driver cooperation at all. It also generalises: it cannot depend on
+      a vendor's job-control semantics because it does not use them.
+
+    Note what this does to the earlier framing. "Detect `PAUSED|ERROR` and
+    resume" is the mitigation that silently destroys badges. "Detect
+    `PAUSED|ERROR`, delete, and resend" is a different mitigation that may
+    well work. The distinction is one word and the whole outcome.
 
 ## Closed task 1 — the card print failed because of the renderer
 
