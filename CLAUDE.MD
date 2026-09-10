@@ -512,6 +512,14 @@ started, and it answers with the old code.
     `dmColor` is not obviously meaningful on a driver that ignores the field
     in one direction already. Test it on media before believing it.
 
+    The separation rule is only half mapped. Confirmed on the label: `R`
+    (255,0,0) prints red, `B` (0,0,255) prints black. So the printer sorts
+    every pixel into red, black or white, and blue is not treated as
+    near-red. Unknown: whether `M` (255,0,255) and `Y` (255,255,0) go red,
+    which decides whether the rule is "exactly 255,0,0" or "red channel
+    dominant". A badge author needs that answer, because under the second
+    rule magenta silently becomes red.
+
 ## Closed task 1 — the card print failed because of the renderer
 
 Resolved. Neither of the two hypotheses this file used to list was right. It
