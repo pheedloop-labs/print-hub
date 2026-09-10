@@ -777,6 +777,41 @@ started, and it answers with the old code.
     DC built with the blob, which is why the stale blob was safe to pin: the
     check that matters was already in the path.
 
+45. **Fourth printer prints, and the rig needed no change for any of them.**
+    The ZD621 on the ZPL driver, 88 x 76 mm mark-sensed stock, pinned blob,
+    203 dpi, raster 703 x 609 px matching the printable area exactly,
+    `clipped=False`, scale error 0.002 x 0.010 mm, 0.79 s end to end. Full
+    bleed, offset 0, 0.
+
+    Four printers, four vendors' driver models, one code path, no
+    conditionals. That is the strongest thing the spike can say about the
+    Windows print path: **getting correct geometry onto media is solved and
+    it generalises.**
+
+    First sub-300 dpi device here, which makes the test card's ladders
+    diagnostic rather than decorative for the first time. One dot is
+    0.125 mm at 203 dpi, so the 0.1 pt hairline at 0.035 mm is under a third
+    of a dot and 4 pt text has strokes thinner than one dot. Whatever
+    happens to those is a resolution limit the agent cannot fix, and it
+    bears on badge text directly.
+
+46. **Two of two roll-fed printers defaulted to not cutting, and cut is
+    never a DEVMODE field.** The Epson did not cut until the setting was
+    enabled by hand (Verified 43), and the ZD621 did not either.
+
+    Read that as the pattern it is. For roll-fed badge printers **the
+    default failure mode is a badge still attached to the roll**, it is
+    invisible to every portable API, and it is carried only by the captured
+    blob. So the capture-after-configuring rule is not a Zebra curiosity or
+    an Epson curiosity: it is the normal case for this class of hardware,
+    and a hub commissioned with a blob captured too early produces uncut
+    output on any of them while reporting success.
+
+    Note the ZD621 caveat before treating it as identical: its cutter is an
+    optional accessory rather than standard, so on this unit no driver
+    setting will help unless the hardware is fitted. Check that before
+    concluding the setting is missing.
+
 ## Closed task 1 — the card print failed because of the renderer
 
 Resolved. Neither of the two hypotheses this file used to list was right. It
@@ -928,6 +963,8 @@ Restore points live in `devmode\`, gitignored:
 | `QL800.62mm-blackred.devmode` | Brother, 62 mm tape, black/red stock |
 | `C4000u.102x302-blackmark.devmode` | Epson, 102 x 302 mm, **cut OFF.** The teaching artefact, not for use |
 | `C4000u.102x302-autocut.devmode` | Epson, 102 x 302 mm, **cut ON.** Pin this one |
+| `ZD621.factory.devmode` | ZD621 as installed, 104 x 76.2 mm. Untouched factory state |
+| `ZD621.88x76-mark.devmode` | ZD621, 88 x 76 mm mark-sensed. Prints correctly, does not cut |
 
 These are restore points on this box, not source, and they are gitignored.
 A fresh machine needs its own captures: the vendor bytes are opaque and
