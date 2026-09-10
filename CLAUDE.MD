@@ -964,6 +964,44 @@ started, and it answers with the old code.
     paperkind 179. Same class as Verified 35 and 44. Do not trust a form
     name.
 
+52. **All five printers on the desk print correct geometry through one
+    unchanged code path.** The DYMO printed on genuine 30252 address labels:
+    imageable 299 x 963 px at 300 dpi, raster matching exactly,
+    `clipped=False`, scale error 0.005 x 0.004 mm, queue cleared to `0x0`
+    with no error. Operator reports it looks good. Visual confirmation, not
+    calipers, so do not quote a number for it.
+
+    Clean contrast with the refused job: that one stuck at `ERROR` with
+    `pStatus` set and never cleared. So the RFID rejection was specifically
+    the third-party labels, not the queue, the driver or the rig.
+
+    | printer | dpi | media | result |
+    |---|---|---|---|
+    | Zebra ZC10L | 300 | 140 x 88 mm PVC card | calipers 100.00 / 50.00 |
+    | Brother QL-800 | 300 | 62 mm continuous DK | operator confirmed |
+    | EPSON CW-C4000u | 600 | 102 x 302 mm badge stock | confirmed, 250 mm target |
+    | Zebra ZD621 | 203 | 88 x 76 mm mark-sensed | printed, calipers pending |
+    | DYMO 550 Turbo | 300 | 28.6 x 88.9 mm address label | operator confirmed |
+
+    **Five printers, four vendors' driver models, 203 to 600 dpi, PVC card
+    through continuous tape through die-cut label through folded badge
+    stock. No conditionals anywhere in the renderer.** That is the strongest
+    statement the spike can make, and it is now measured rather than argued:
+    *getting correct geometry onto media is solved, and it generalises.*
+
+    Set against it, the fault side generalised to nothing. Three printers
+    were broken deliberately and each put the truth in a different API
+    field. Whatever the memo says about the print path, it must not extend
+    that confidence to reporting.
+
+53. The test card generator gained a **narrow-media layout**, because the
+    standard one needs roughly 60 mm of width and a DYMO address label is
+    28.6 mm. On narrow pages the long axis does the measuring: one long
+    vertical caliper target, and the **corner crosses as the horizontal
+    target**, since their spacing is an exact known distance. No ruler,
+    because on a page that narrow it would have to cross the vertical
+    target. It reports which layout it used.
+
 ## Closed task 1 — the card print failed because of the renderer
 
 Resolved. Neither of the two hypotheses this file used to list was right. It

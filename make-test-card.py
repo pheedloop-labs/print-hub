@@ -106,13 +106,14 @@ if n_line < len(LINE_WIDTHS) or n_text < len(TEXT_SIZES):
     print(f"page is {H:g} mm, needs {used:.1f}: ladders trimmed to "
           f"{n_line} line widths and {n_text} text sizes")
 
-# Refuse rather than emit an unmeasurable card. At 25 mm wide this file used
-# to write a 0 mm caliper target and negative-width colour patches that ran
-# off the page edge, and report success while doing it.
-if HT < 15 or VT < 15:
-    sys.exit(f"page {W:g} x {H:g} mm is too small for a measurable card: "
-             f"targets came out {HT:g} / {VT:g} mm, need 15 mm minimum. "
-             f"Widen the media or measure with the ruler instead.")
+# The standard layout needs roughly 60 mm of width for its right-hand
+# column, ruler, two ladders and ten patches. Narrower media gets a reduced
+# layout instead, because at 25 mm this file used to write a 0 mm caliper
+# target and negative-width patches off the page edge and report success.
+NARROW = HT < 15
+if VT < 15:
+    sys.exit(f"page {W:g} x {H:g} mm is too short to measure: vertical target "
+             f"came out {VT:g} mm, need 15 mm minimum.")
 
 OUT = f"test-card-{W:g}x{H:g}.pdf"
 c = canvas.Canvas(OUT, pagesize=(W * mm, H * mm))
@@ -136,6 +137,61 @@ def ctext(x, y, s, size=6, font="Helvetica"):
 
 c.setStrokeColorRGB(0, 0, 0)
 c.setFillColorRGB(0, 0, 0)
+
+if NARROW:
+    # Narrow media, such as a 28.6 mm DYMO 30252 address label. The long axis
+    # does the measuring here: one long vertical caliper target, plus the
+    # corner crosses, whose horizontal spacing is an exact known distance and
+    # so is a caliper target in its own right. No ruler, because it would
+    # have to cross the vertical target on a page this narrow.
+    NM, NARM = 4.0, 2.2
+    span = W - 2 * NM                          # cross centre to cross centre
+    vt = (H - 2 * NM - 14.0) // 5 * 5
+    vx = W - NM - NARM - 0.8
+    vy0 = (H - vt) / 2.0
+    left = vx - NARM - 1.0                     # right edge of the content column
+
+    for cx, cy in ((NM, NM), (W - NM, NM), (NM, H - NM), (W - NM, H - NM)):
+        line(cx - 1.6, cy, cx + 1.6, cy, 0.3)
+        line(cx, cy - 1.6, cx, cy + 1.6, 0.3)
+
+    line(vx, vy0, vx, vy0 + vt, 0.35)
+    for y in (vy0, vy0 + vt):
+        line(vx - NARM, y, vx + NARM, y, 0.45)
+    c.saveState()
+    c.translate(vx * mm, (vy0 + vt / 2.0) * mm)
+    c.rotate(90)
+    c.setFont("Helvetica", 4.2)
+    c.drawCentredString(0, (NARM + 0.9) * mm, f"{vt:.2f} mm")
+    c.restoreState()
+
+    text(NM, H - NM - 2.0, f"{W:g}x{H:g} noscale", 3.8)
+    text(NM, H - NM - 5.6, f"cross-cross {span:.2f} mm", 3.8)
+
+    y = vy0 + vt - 4.0
+    for size in (4, 5, 6):
+        text(NM, y, f"{size}pt 0O1lI8", size)
+        y -= size * 0.42 + 2.2
+    y -= 1.5
+    for w in (0.25, 0.5, 1.0):
+        line(NM, y, NM + 7, y, w)
+        text(NM + 8, y - 0.5, f"{w}pt", 3.2)
+        y -= 2.4
+
+    ps = min(4.0, (span - 3 * 1.0) / 4)
+    py = NM + 1.5
+    for i, g in enumerate((0.0, 0.25, 0.5, 0.75)):
+        c.setFillColorRGB(g, g, g)
+        c.rect((NM + i * (ps + 1.0)) * mm, py * mm, ps * mm, ps * mm,
+               stroke=0, fill=1)
+    c.setFillColorRGB(0, 0, 0)
+    text(NM, py + ps + 1.0, "K 75 50 25", 3.2)
+
+    c.showPage()
+    c.save()
+    print(f"wrote {OUT}  NARROW layout ({W:g} x {H:g} mm, "
+          f"vertical target {vt:g} mm, cross-to-cross {span:.2f} mm)")
+    raise SystemExit
 
 # --- corner registration crosses, centres exactly M mm in from each edge ---
 for cx, cy in ((M, M), (W - M, M), (M, H - M), (W - M, H - M)):
