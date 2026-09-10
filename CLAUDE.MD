@@ -698,9 +698,48 @@ started, and it answers with the old code.
     configuring the driver by hand, and it is now the second independent
     reason for that rule rather than a Zebra curiosity.
 
-    To settle it: enable auto-cut in the driver UI, capture a second blob,
-    `devmode.py diff` the two to locate the bytes, then replay both ways as
-    Verified 17 did with zoom.
+    Enabling auto-cut moved **19 private bytes and nothing public**, so the
+    `dmDeviceName` residue trap from Verified 17 did not appear on this
+    driver. Decoding them against known device numbers explains all but two:
+
+    | private+ | a -> b | reading |
+    |---|---|---|
+    | 560, 564, 1980, 1996, 2036 | 2551 -> 2409 | page width px |
+    | 568, 1984, 2000, 2040 | 4129 -> 7134 | page height px |
+    | 592 | 4129 -> 7133 | page height - 1 |
+    | **268** | 256 -> 65 | unexplained |
+    | **600** | 1 -> 2 | unexplained. The cut-mode candidate |
+
+    `+600` moving 1 to 2 is the plausible cut enum. Do not assert it without
+    a behavioural test; the diff cannot distinguish it from `+268`.
+
+44. **The private region carried stale geometry, and nothing visible said
+    so.** The first Epson blob recorded page width 2551 px and height
+    4129 px in its private bytes: the **old** 108 x 174.8 mm die-cut size.
+    At the same moment the public section correctly said paperkind 256 at
+    102 x 302 mm, and `CreateDC` plus `GetDeviceCaps` correctly reported
+    2409 x 7134. The blob contradicted itself and no public field or live
+    DC reading revealed it.
+
+    Setting the media by hand did **not** refresh those private bytes. It
+    took a second trip through the driver UI, for the cut setting, before
+    the driver rewrote them. So "configure by hand, then capture" does not
+    guarantee an internally consistent blob.
+
+    **State the consequence carefully, because it is smaller than it
+    looks.** The staleness had no observable effect. The DC built from that
+    blob reported correct geometry and the badge printed at correct scale,
+    so this driver resolves geometry from the public section and treats its
+    private copy as derived. A driver that trusted its private geometry
+    instead would misprint silently, but nothing here demonstrates that any
+    driver does. Do not carry this to the memo as a live hazard.
+
+    What it does establish is narrower and still useful: **the private
+    region is not a reliable record of the queue's geometry, so never read
+    geometry out of it.** Ask the driver. `pdfium_print --dry-run --devmode
+    <blob>` already does exactly that, reporting printable px and mm from a
+    DC built with the blob, which is why the stale blob was safe to pin: the
+    check that matters was already in the path.
 
 ## Closed task 1 — the card print failed because of the renderer
 
