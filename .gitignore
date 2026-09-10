@@ -34,3 +34,9 @@ service*.log
 spool/
 out.pdf
 *.prn
+
+# Vendor driver installers, ~400 MB. Downloaded per printer and needed to
+# rebuild a box, but they are redistributable binaries, not our source.
+# Currently: Brother QL-800, EPSON CW-C4000u, DYMO Connect, Zebra ZC10L,
+# Zebra ZD621.
+Drivers/

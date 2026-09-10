@@ -1,18 +1,34 @@
 """Generate a caliper-measurable test card for the print hub spike.
 
-Page is exactly 140.0 x 88.0 mm - the ZC10L large-format card.
-Print it with noscale. Then measure the targets with digital calipers.
+    make-test-card.py                      -> 140.0 x 88.0, the ZC10L card
+    make-test-card.py 83.99 58.93 70 40    -> W H [h-target v-target]
+
+Print it with noscale, then measure the two targets with digital calipers.
 Any renderer that scales the page shows up as a wrong reading.
+
+Author the page at the *imageable* size the driver reports, not the form
+size. pdfium_print.py blits 1:1 centred inside HORZRES x VERTRES, so a page
+authored larger than the imageable area is clipped or rescaled, and both
+failures are invisible by eye on a badge. Read the imageable size from
+GetDeviceCaps HORZRES/VERTRES divided by LOGPIXELSX, because a driver with
+unprintable margins reports a physical page bigger than it can image: the
+Brother QL-800 is 1062 x 732 px physical against 992 x 696 imageable.
 """
+
+import sys
 
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
-W, H = 140.0, 88.0
-OUT = "test-card-140x88.pdf"
+args = sys.argv[1:]
+W, H = (float(args[0]), float(args[1])) if len(args) >= 2 else (140.0, 88.0)
+HT = float(args[2]) if len(args) >= 3 else 100.0
+VT = float(args[3]) if len(args) >= 4 else 50.0
+OUT = f"test-card-{W:g}x{H:g}.pdf"
 
+M = 5.0                                   # margin to the registration crosses
 c = canvas.Canvas(OUT, pagesize=(W * mm, H * mm))
-c.setTitle("PheedLoop Print Hub test card 140x88mm")
+c.setTitle(f"PheedLoop Print Hub test card {W:g}x{H:g}mm")
 
 
 def line(x1, y1, x2, y2, width=0.25):
@@ -30,98 +46,90 @@ def ctext(x, y, s, size=6, font="Helvetica"):
     c.drawCentredString(x * mm, y * mm, s)
 
 
-# --- corner registration crosses, centres exactly 5 mm in from each edge ---
 c.setStrokeColorRGB(0, 0, 0)
-for cx, cy in ((5, 5), (W - 5, 5), (5, H - 5), (W - 5, H - 5)):
+c.setFillColorRGB(0, 0, 0)
+
+# --- corner registration crosses, centres exactly M mm in from each edge ---
+for cx, cy in ((M, M), (W - M, M), (M, H - M), (W - M, H - M)):
     line(cx - 2, cy, cx + 2, cy, 0.25)
     line(cx, cy - 2, cx, cy + 2, 0.25)
 
-# --- top ruler: 0 to 130 mm, origin at x = 5 mm ---
-RULER_Y = H - 10.0
-RULER_X0 = 5.0
-RULER_LEN = 120
-line(RULER_X0, RULER_Y, RULER_X0 + RULER_LEN, RULER_Y, 0.25)
-for i in range(0, RULER_LEN + 1):
-    if i % 10 == 0:
-        h = 3.0
-    elif i % 5 == 0:
-        h = 2.0
-    else:
-        h = 1.0
-    line(RULER_X0 + i, RULER_Y, RULER_X0 + i, RULER_Y + h, 0.15)
+# --- identity block ---
+text(M, H - 4.0, "PheedLoop Print Hub - spike test card", 6.5, "Helvetica-Bold")
+text(M, H - 7.4, f"Page {W:g} x {H:g} mm. noscale. Measure both targets.", 4.5)
+text(M, H - 10.6, "renderer: ______  queue: ______  date: ______", 4.5)
+
+# --- ruler, 1 mm ticks, origin at the top-left cross ---
+RULER_Y = H - 18.0
+RULER_LEN = int(W - 2 * M)
+line(M, RULER_Y, M + RULER_LEN, RULER_Y, 0.25)
+for i in range(RULER_LEN + 1):
+    h = 3.0 if i % 10 == 0 else 2.0 if i % 5 == 0 else 1.0
+    line(M + i, RULER_Y, M + i, RULER_Y + h, 0.15)
 for i in range(0, RULER_LEN + 1, 20):
-    ctext(RULER_X0 + i, RULER_Y + 4.6, str(i), 4.5)
-text(RULER_X0, RULER_Y - 4.0,
-     "ruler: 1 mm ticks, origin = corner cross, 5.0 mm from left edge", 4.5)
+    ctext(M + i, RULER_Y + 4.2, str(i), 4.0)
+text(M, RULER_Y - 3.4, f"ruler 1 mm ticks, origin = cross, {M:g} mm from left", 4.0)
 
-# --- 100.00 mm horizontal target ---
-TY = 50.0
-TX0, TX1 = 20.0, 120.0
-line(TX0, TY, TX1, TY, 0.35)
-line(TX0, TY - 3, TX0, TY + 3, 0.35)
-line(TX1, TY - 3, TX1, TY + 3, 0.35)
-ctext((TX0 + TX1) / 2, TY + 1.5, "100.00 mm  (tick centre to tick centre)", 5.5)
+# --- horizontal caliper target, centred ---
+TY = H * 0.50
+TX0 = (W - HT) / 2.0
+line(TX0, TY, TX0 + HT, TY, 0.35)
+line(TX0, TY - 2.5, TX0, TY + 2.5, 0.35)
+line(TX0 + HT, TY - 2.5, TX0 + HT, TY + 2.5, 0.35)
+ctext(W / 2.0, TY + 1.2, f"{HT:.2f} mm  (tick centre to tick centre)", 5.0)
 
-# --- 50.00 mm vertical target ---
-VX = 130.0
-VY0, VY1 = 15.0, 65.0
-line(VX, VY0, VX, VY1, 0.35)
-line(VX - 3, VY0, VX + 3, VY0, 0.35)
-line(VX - 3, VY1, VX + 3, VY1, 0.35)
+# --- vertical caliper target, centred, clear of the corner crosses ---
+VX = W - M - 2.5
+VY0 = (H - VT) / 2.0
+line(VX, VY0, VX, VY0 + VT, 0.35)
+line(VX - 2.5, VY0, VX + 2.5, VY0, 0.35)
+line(VX - 2.5, VY0 + VT, VX + 2.5, VY0 + VT, 0.35)
 c.saveState()
-c.translate(VX * mm, ((VY0 + VY1) / 2) * mm)
+c.translate(VX * mm, (VY0 + VT / 2.0) * mm)
 c.rotate(90)
-c.setFont("Helvetica", 5.5)
-c.drawCentredString(0, 1.5 * mm, "50.00 mm")
+c.setFont("Helvetica", 5.0)
+c.drawCentredString(0, 1.2 * mm, f"{VT:.2f} mm")
 c.restoreState()
 
-# --- line width ladder: does the renderer keep hairlines? ---
-LX, LY = 20.0, 40.0
-text(LX, LY + 3.0, "line width", 4.5)
+# --- line width and text size ladders, side by side under the target ---
+LY = TY - 5.0
+text(M, LY, "line width", 4.0)
 for i, w in enumerate((0.1, 0.25, 0.5, 1.0, 2.0)):
-    y = LY - i * 2.2
-    line(LX, y, LX + 20, y, w)
-    text(LX + 21, y - 0.6, f"{w} pt", 4)
+    y = LY - 2.4 - i * 2.0
+    line(M, y, M + 14, y, w)
+    text(M + 15, y - 0.6, f"{w}pt", 3.5)
 
-# --- text size ladder: badge text is small, so prove it renders ---
-TX, TY2 = 55.0, 40.0
-text(TX, TY2 + 3.0, "text size", 4.5)
-for i, s in enumerate((4, 5, 6, 8, 10)):
-    text(TX, TY2 - i * 3.6, f"{s}pt Helvetica 0O1lI8B", s)
+TX2 = W * 0.42
+text(TX2, LY, "text size", 4.0)
+for i, s in enumerate((4, 5, 6, 8)):
+    text(TX2, LY - 3.0 - i * 3.0, f"{s}pt Helvetica 0O1lI8B", s)
 
-# --- colour patches: for the ZC10L colour check ---
+# --- red channel test, for two-colour media such as Brother DK-2251 ---
+# The QL-800 reports colordevice 0 and dmColor 1, monochrome, even with
+# black/red stock loaded, so whether red survives is an empirical question.
+RY = 13.5
+c.setFillColorRGB(1, 0, 0)
+c.rect(M * mm, RY * mm, 18 * mm, 4 * mm, stroke=0, fill=1)
+text(M + 19, RY + 1.2, "RED CHANNEL: bar and this text are pure red 255,0,0", 4.0)
+c.setFillColorRGB(0, 0, 0)
+
+# --- colour patches, sized to whatever width is available ---
 # Keep these 3-tuples. setFillColorRGB reads a 4th value as alpha, and an
 # alpha of 0 makes every later object invisible.
-PX, PY, PS = 20.0, 12.0, 7.0
-patches = [
-    ("C", (0, 1, 1)), ("M", (1, 0, 1)), ("Y", (1, 1, 0)),
-    ("K", (0, 0, 0)), ("R", (1, 0, 0)), ("G", (0, 1, 0)),
-    ("B", (0, 0, 1)),
-]
+patches = [("C", (0, 1, 1)), ("M", (1, 0, 1)), ("Y", (1, 1, 0)),
+           ("K", (0, 0, 0)), ("R", (1, 0, 0)), ("G", (0, 1, 0)),
+           ("B", (0, 0, 1)), ("25", (.75, .75, .75)), ("50", (.5, .5, .5)),
+           ("75", (.25, .25, .25))]
+GAP = 1.2
+PS = min(7.0, (W - 2 * M - (len(patches) - 1) * GAP) / len(patches))
+PY = 4.5
 for i, (label, rgb) in enumerate(patches):
-    x = PX + i * (PS + 1.5)
+    x = M + i * (PS + GAP)
     c.setFillColorRGB(*rgb)
     c.rect(x * mm, PY * mm, PS * mm, PS * mm, stroke=0, fill=1)
     c.setFillColorRGB(0, 0, 0)
-    ctext(x + PS / 2, PY - 3.0, label, 4.5)
-
-# grey ramp
-for i, g in enumerate((0.0, 0.25, 0.5, 0.75)):
-    x = PX + 7 * (PS + 1.5) + i * (PS + 1.5)
-    c.setFillColorRGB(g, g, g)
-    c.rect(x * mm, PY * mm, PS * mm, PS * mm, stroke=0, fill=1)
-c.setFillColorRGB(0, 0, 0)
-ctext(PX + 7 * (PS + 1.5) + 1.5 * (PS + 1.5), PY - 3.0, "grey ramp", 4.5)
-
-# --- identity block ---
-c.setFillColorRGB(0, 0, 0)
-c.setStrokeColorRGB(0, 0, 0)
-text(20.0, H - 18.0, "PheedLoop Print Hub - spike test card", 7.5, "Helvetica-Bold")
-text(20.0, H - 22.0,
-     "Page 140.0 x 88.0 mm. Print with noscale. Measure both targets.", 5)
-text(20.0, H - 25.5,
-     "renderer: ____________   queue: ____________   date: __________", 5)
+    ctext(x + PS / 2, PY - 2.6, label, 3.5)
 
 c.showPage()
 c.save()
-print(f"wrote {OUT}")
+print(f"wrote {OUT}  ({W:g} x {H:g} mm, targets {HT:g} / {VT:g})")

@@ -90,6 +90,37 @@ authored at the wrong size makes `noscale` meaningless: the renderer either
 clips a fraction of a millimetre or the driver scales to fit, and neither
 failure is visible by eye on a badge.
 
+## The Brother QL-800 media
+
+Different enough from the card printer to be worth its own note. The
+operator selected form `62mm`, paperkind **259**, and set the paper type to
+black/red by hand.
+
+| Thing | Value |
+|---|---|
+| form | `62mm`, paperkind 259, 62.0 x 89.8 mm |
+| tape | 62 mm wide, continuous. No fixed length |
+| physical page | 1062 x 732 px at 300 dpi |
+| **imageable** | **992 x 696 px = 83.99 x 58.93 mm**, landscape |
+| offset | 35, 18 px = 2.96 mm left, 1.52 mm top |
+
+**Author Brother pages at 83.98 x 58.92 mm**, not at 83.99 x 58.93. PDFium
+rounds its raster up, so the exact imageable size rasters to 993 x 697 into
+a 992 x 696 area and `pdfium_print` correctly reports `clipped=True`. A hair
+under lands exactly on 992 x 696 with `clipped=False` and a scale error of
+0.009 mm. The overhang is only 0.084 mm, below this box's noise floor, but
+it is the difference between a guarantee and a coincidence.
+
+Author against the **imageable** size on any driver, never the form size.
+The ZC10L and the Epson report zero offset with physical equal to imageable,
+so the distinction never came up before the Brother.
+
+Still open: whether red actually prints. The driver reports `colordevice 0`
+and `dmColor 1`, monochrome, even with black/red stock selected, and
+`dmMediaType` stayed 0, so the paper-type choice must live in the 320
+private bytes. `test-card-83.98x58.92.pdf` carries a pure red bar and a line
+of pure red text to settle it by eye.
+
 ## Files
 
 | File | Purpose |
@@ -101,13 +132,22 @@ failure is visible by eye on a badge.
 | `caps.py` | dumps a driver's paper names, paperkind ids, and DEVMODE defaults |
 | `spike4_monitor.py` | polls a queue and logs every state change, with timing |
 | `spike4-timeline.txt` | raw spike 4 timeline. Evidence for the memo |
-| `make-test-card.py` | generates the calibration card. Edit `W, H` at the top |
-| `test-card-140x88.pdf` | the current calibration card |
+| `make-test-card.py` | generates a calibration card at any page size |
+| `test-card-140x88.pdf` | calibration card for `HUB-CARD`, the ZC10L |
+| `test-card-83.98x58.92.pdf` | calibration card for the Brother QL-800 |
 | `spool\` | saved job PDFs. Safe to delete. Gitignored |
 | `out.pdf` | output of the `HUB-PDF` queue. Overwritten each print. Gitignored |
 
-`make-test-card.py` takes no arguments, despite what earlier notes claimed.
-The page size is the `W, H` constants at the top of the file.
+`make-test-card.py` now takes optional arguments, and earlier notes saying
+it takes none are out of date:
+
+```
+make-test-card.py                     -> 140.0 x 88.0, the ZC10L card
+make-test-card.py 83.98 58.92 70 40   -> W H [h-target v-target]
+```
+
+The layout derives every position from `W` and `H`, and the caliper targets
+shrink to fit, because a 100 mm target does not fit on a 84 mm label.
 
 The venv is gitignored, and so are any leftover SumatraPDF binaries still
 sitting on the box: that renderer is GPLv3 and must never reach the repo.
@@ -431,6 +471,24 @@ started, and it answers with the old code.
     within 0.4 mm. The disagreement in Verified 18 appears only when a
     vendor scale setting is engaged, so a consistency check is a valid
     detector but not a passive one.
+
+35. **`GetPrinter` level 2 `pDevMode` carries stale geometry. Do not read
+    it.** After the operator changed the Brother's form to `62mm` by hand,
+    the stored default still reported `dmPaperWidth` 290, the 29 mm value
+    from the form before it, while `dmPaperSize` had correctly moved to 259.
+    `DocumentProperties` resolved the same queue to 620, and `CreateDC`
+    agreed with `DocumentProperties`.
+
+    So the driver updates the stored blob's paper *id* and fixes the
+    dimensions up only at resolve time. `caps.py` had been reporting the
+    stale source since it was written; it now delegates to `devmode.py`.
+    `HUB-CARD` agrees across both sources, which is why this went unnoticed:
+    its form has never been changed.
+36. **The renderer works on a second driver, and the pin travels.**
+    `pdfium_print` printed to the Brother QL-800 with a captured Brother
+    blob pinned, reporting 300 dpi, 992 x 696 px, `clipped=False` and a
+    scale error of 0.009 x 0.008 mm. So neither the PDFium path nor the
+    per-job DEVMODE pin is specific to the ZC10L. Awaiting calipers.
 
 ## Closed task 1 — the card print failed because of the renderer
 
@@ -816,6 +874,11 @@ even though it is reactive.
   port writes `out.pdf` later still. Check for a job or a file in a wait
   loop, never immediately. Two apparent failures in this work were this race
   and nothing else.
+- **Two ways to read a queue's default DEVMODE disagree.** `GetPrinter`
+  level 2 `pDevMode` is the *stored* default and can hold geometry the
+  driver no longer uses; `DocumentProperties` with `DM_OUT_BUFFER` is the
+  *resolved* default and matches what `CreateDC` actually builds. Always
+  read the resolved one. See Verified 35 for the case that caught this.
 - In this pywin32 build `DeviceCapabilities` returns dicts, not tuples:
   `DC_PAPERSIZE` gives `{'x','y'}` and `DC_MINEXTENT`/`DC_MAXEXTENT` give
   `{'Width','Length'}`, all in tenths of a millimetre.

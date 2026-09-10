@@ -5,6 +5,13 @@
 DC_PAPERSIZE reports each form in tenths of a millimetre, which is the unit
 DEVMODE itself uses for dmPaperWidth / dmPaperLength. Everything here is read
 only. It opens no dialog.
+
+The current settings come from devmode.py, which reads DocumentProperties.
+This file used to read GetPrinter level 2 pDevMode instead, and that source
+lies: after the operator changed the Brother's form to 62mm by hand it still
+reported dmPaperWidth 290, the 29 mm value from the previous form, while
+dmPaperSize had correctly moved to 259. DocumentProperties resolved the same
+queue to 620. Trust the resolved default, never the stored one.
 """
 
 import sys
@@ -82,20 +89,8 @@ def main(queue):
         print(f"bins        : unavailable ({exc})")
 
     print()
-    print("DEVMODE defaults")
-    devmode = info.get("pDevMode")
-    if devmode is None:
-        print("  (queue reported no DEVMODE)")
-        return
-    for field in (
-        "PaperSize", "PaperWidth", "PaperLength", "Orientation", "Color",
-        "Copies", "PrintQuality", "YResolution", "DefaultSource", "MediaType",
-        "Scale", "Fields", "Size", "DriverExtra",
-    ):
-        try:
-            print(f"  {field:<14}= {getattr(devmode, field)}")
-        except AttributeError:
-            pass
+    import devmode as dm
+    dm.print_description(dm.capture(queue), "resolved DEVMODE default")
 
 
 if __name__ == "__main__":
