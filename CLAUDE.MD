@@ -1055,6 +1055,50 @@ started, and it answers with the old code.
     independent time this spike has produced a perfect success report for a
     badge that does not exist. Design rule 2 needs no further defence.
 
+56. **Removing and re-adding a printer wipes its hand configuration, and
+    the captured blob puts it back.** The operator removed and re-added the
+    Brother to recover it from the wrong USB port. The queue came back with
+    the **same name and the same port**, which is worse than if it had not,
+    because the blob's queue-name check then passes. Its media had silently
+    reverted to the factory default, paperkind 271 at 29 x 90 mm.
+
+    | | printable | placement | clipped |
+    |---|---|---|---|
+    | no blob, inherits the reverted default | 83.90 x **25.91** mm | (-1, **-195**) | **True** |
+    | the pre-removal blob pinned | 83.99 x **58.93** mm | (0, 0) | **False** |
+
+    So **the blob is a configuration backup, not merely a settings pin.**
+    That is a better deployment story than the spike has been telling: a
+    venue tech who reinstalls a printer wipes its media setup, and the blob
+    restores it without anyone needing to know what was in it. Capture one
+    per printer per box and keep it.
+
+    Note the failure mode it prevents. Unpinned, the page would have been
+    placed at y = -195 and cropped to 306 of its 696 rows: not a subtle
+    scale error but most of the badge missing, from a printer that reported
+    `Normal` throughout.
+
+57. **`clipped` is the only check in this spike that caught a silent
+    failure, and the reason generalises.** Every other silent failure
+    reported flawless success: the 5% oversized card (Verified 18), the
+    uncut badge (43, 47), the unplugged printer (54, 55). This one reported
+    `clipped=True`.
+
+    The difference is structural. `clipped` is computed by comparing the
+    **authored page size in the PDF** against **`GetDeviceCaps` on the real
+    DC** — two independent sources, neither of which is trusted alone.
+    Every check that failed us trusted a single driver claim: `LOGPIXELSX`
+    for dpi, `DC_COLORDEVICE` for colour, `Status` for health.
+
+    **Carry this as the design rule it is: a check is only worth having if
+    it compares two sources that can disagree.** It is the one reusable
+    lesson about detection in the whole spike.
+
+    Product consequence, and it is small: `pdfium_print` currently *reports*
+    `clipped=True` and prints anyway. **The agent should refuse.** It is the
+    single detectable member of the silent-failure family, so declining the
+    job costs one honest error and saves a wrong badge.
+
 ## Closed task 1 — the card print failed because of the renderer
 
 Resolved. Neither of the two hypotheses this file used to list was right. It
