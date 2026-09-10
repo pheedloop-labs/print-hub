@@ -539,8 +539,9 @@ started, and it answers with the old code.
     dialog on a headless box is an outage; here the outage is imported with
     the driver and cannot be switched off from our side.
 
-    Whether `SetJob` with `JOB_CONTROL_RESUME` substitutes for the click is
-    the open question that decides if this is survivable. See task 5.
+    Whether `SetJob` with `JOB_CONTROL_RESUME` substitutes for the click
+    decides whether this is survivable. First attempt suggested it does not,
+    but the trial was confounded. See Verified 41 and re-run it.
 
 39. **The dialog names the fault in plain English while the API returns
     `Other`.** The popup read:
@@ -580,6 +581,41 @@ started, and it answers with the old code.
     lies, poll printer status". On the Brother it is the *job* status that
     carries the error bit the printer status will not name. **Read both,
     trust neither alone.**
+
+41. **Unresolved: does programmatic resume recover the job or destroy it?**
+    Recorded because the question is important, not because it is answered.
+    The first attempt was confounded and must be re-run.
+
+    | action | outcome |
+    |---|---|
+    | operator clicks Resume in the driver dialog | label printed |
+    | `SetJob` `JOB_CONTROL_RESUME` on the paused job | job left the queue in 0.5 s, `Status` back to `0x0`, WMI `Idle`, no error raised, **no label** |
+    | fresh job, no fault present | label printed normally |
+
+    **The confound: the fault used was media-out, and the operator reports
+    the roll may not have been properly seated when it went back in.** So
+    the missing label has two candidate causes that this trial cannot
+    separate, and the innocent one is at least as likely: a badly seated
+    roll simply could not feed. That the next job printed does not settle it
+    either, because a feed attempt can seat a roll.
+
+    Re-run it with **cover open** as the fault instead. Opening and closing
+    the cover never disturbs the media, so the seating variable disappears
+    and the result means what it says. Media-out was the wrong fault to test
+    a recovery path with, because it perturbs the one thing that decides
+    whether a label can physically emerge.
+
+    What rides on the answer, which is why it is worth another label. If
+    resume recovers the job, the QL-800 is usable headless provided the
+    agent detects `PAUSED|ERROR` and resumes, and that becomes a product
+    requirement rather than an optimisation. If resume discards the job,
+    the printer cannot run unattended at all **and** the first mitigation
+    any engineer would reach for is a badge shredder that reports success.
+    Those are opposite conclusions, so do not carry either into the memo
+    until the clean run is done.
+
+    Also untested: `JOB_CONTROL_RESTART`, documented to reprint from the
+    beginning, which may be what the dialog's button actually maps to.
 
 ## Closed task 1 — the card print failed because of the renderer
 
