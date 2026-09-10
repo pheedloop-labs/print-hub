@@ -137,10 +137,12 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
 
 <div class="thesis">
   <p>One pattern organises every result here. <strong>Everything about getting bytes onto
-  media generalises. Nothing about knowing what happened does.</strong> Four printers printed
-  correct geometry through one code path with no conditionals. Meanwhile the three whose faults
-  were induced put the answer in three <em>different</em> API fields, and two printers from the
-  same vendor disagreed so completely that no shared promise survives.</p>
+  media generalises. Nothing about knowing what happened does.</strong> All five printed
+  correct geometry through one unchanged code path &mdash; 203 to 600 dpi, PVC card through
+  continuous tape through die-cut label through folded badge stock, four vendors' driver
+  models, no conditionals anywhere in the renderer. Meanwhile the three whose faults were
+  induced put the answer in three <em>different</em> API fields, and two printers from the same
+  vendor disagreed so completely that no shared promise survives.</p>
 </div>
 </div>
 
@@ -176,12 +178,12 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
     <p>Cut mode proven to replay on a four-byte diff, the tightest in the spike. The only
     sub-300 dpi device here. Also speaks ZPL, so a raw path may bypass all of this.</p>
   </div>
-  <div class="card nope">
+  <div class="card partial">
     <h4>DYMO 550 Turbo</h4>
     <p class="who">USB005 &middot; 300 dpi</p>
-    <p class="v">Blocked on consumables</p>
-    <p>Refuses third-party labels by RFID, so it never printed. Reports the best fault text
-    of the five, in <span class="m">pStatus</span>. Worst margins. Needs genuine stock.</p>
+    <p class="v">Prints, faults untested</p>
+    <p>Prints on genuine stock and refuses third-party labels by RFID. Reports the best
+    fault text of the five, in <span class="m">pStatus</span>. Worst margins.</p>
   </div>
 </div>
 
@@ -224,26 +226,26 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
 <table>
   <thead><tr><th>Field</th><th>Zebra ZC10L</th><th>Brother QL-800</th><th>EPSON CW-C4000u</th><th>Zebra ZD621</th><th>DYMO 550</th></tr></thead>
   <tbody>
-    <tr><td class="field">Media tested</td><td>140 &times; 88 mm PVC card</td><td>62 mm continuous DK, black/red</td><td>102 &times; 302 mm, black mark</td><td>88 &times; 76 mm, mark sensed</td><td>58 &times; 100 mm, third-party</td></tr>
-    <tr><td class="field">Physical, px</td><td>1680 &times; 1051</td><td>1062 &times; 732</td><td>2409 &times; 7134</td><td>703 &times; 609</td><td>694 &times; 1200</td></tr>
-    <tr><td class="field">Imageable, px</td><td>1680 &times; 1051</td><td><strong>992 &times; 696</strong></td><td>2409 &times; 7134</td><td>703 &times; 609</td><td>665 &times; 1112</td></tr>
-    <tr><td class="field">Unprintable offset, px</td><td>0, 0</td><td><strong>35, 18</strong></td><td>0, 0</td><td>0, 0</td><td><strong>17, 70</strong></td></tr>
+    <tr><td class="field">Media tested</td><td>140 &times; 88 mm PVC card</td><td>62 mm continuous DK, black/red</td><td>102 &times; 302 mm, black mark</td><td>88 &times; 76 mm, mark sensed</td><td>28.6 &times; 88.9 mm, genuine 30252</td></tr>
+    <tr><td class="field">Physical, px</td><td>1680 &times; 1051</td><td>1062 &times; 732</td><td>2409 &times; 7134</td><td>703 &times; 609</td><td>329 &times; 1050</td></tr>
+    <tr><td class="field">Imageable, px</td><td>1680 &times; 1051</td><td><strong>992 &times; 696</strong></td><td>2409 &times; 7134</td><td>703 &times; 609</td><td>299 &times; 963</td></tr>
+    <tr><td class="field">Unprintable offset, px</td><td>0, 0</td><td><strong>35, 18</strong></td><td>0, 0</td><td>0, 0</td><td><strong>18, 69</strong></td></tr>
     <tr><td class="field">Full bleed possible?</td>
       <td><span class="p ok">YES</span></td>
       <td><span class="p no">NO, 2.96 / 1.52 mm</span></td>
       <td><span class="p ok">YES</span></td>
-      <td><span class="p ok">YES</span></td><td><span class="p no">NO, 1.44 / 5.93 mm</span></td></tr>
-    <tr><td class="field">Author page at, mm</td><td>142.23 &times; 88.98</td><td>83.98 &times; 58.92</td><td>101.98 &times; 302.00</td><td>87.96 &times; 76.19</td><td>56.30 &times; 94.14</td></tr>
+      <td><span class="p ok">YES</span></td><td><span class="p no">NO, 1.52 / 5.84 mm</span></td></tr>
+    <tr><td class="field">Author page at, mm</td><td>142.23 &times; 88.98</td><td>83.98 &times; 58.92</td><td>101.98 &times; 302.00</td><td>87.96 &times; 76.19</td><td>25.31 &times; 81.53</td></tr>
     <tr><td class="field">dpi vs mm agree at rest, mm</td>
       <td><span class="p ok">0.24 / 0.02</span></td>
       <td><span class="p ok">0.01 / 0.07</span></td>
       <td><span class="p ok">0.02 / 0.01</span></td>
-      <td><span class="p ok">0.02 / 0.20</span></td><td><span class="p wa">0.30 / 0.15</span></td></tr>
+      <td><span class="p ok">0.02 / 0.20</span></td><td><span class="p wa">0.32 / 0.47</span></td></tr>
     <tr><td class="field">Scale on media</td>
       <td><span class="p ok">100.00 / 50.00 calipers</span></td>
       <td><span class="p ok">operator confirmed</span></td>
       <td><span class="p ok">confirmed, 250 mm target</span></td>
-      <td><span class="p wa">printed, calipers pending</span></td><td><span class="p no">BLOCKED, labels refused</span></td></tr>
+      <td><span class="p wa">printed, calipers pending</span></td><td><span class="p ok">operator confirmed</span></td></tr>
     <tr class="group"><td colspan="6">Resolution floor &mdash; one dot, and what survives it</td></tr>
     <tr><td class="field">One dot, in points</td><td>0.24 pt</td><td>0.24 pt</td><td>0.12 pt</td><td><strong>0.355 pt</strong></td><td>0.24 pt</td></tr>
     <tr><td class="field">0.1 pt hairline</td>
@@ -519,11 +521,12 @@ how much of the renderer finding was the ZC10L being an outlier rather than the 
 weak. One label each for two more: whether Brother magenta and yellow also print red, which
 decides how a two-colour badge may be authored, and whether deleting a stuck Brother job
 unblocks the queue, the one recovery route not yet ruled out.</p>
-<p><strong>The DYMO is blocked on consumables, not on work.</strong> It refuses third-party
-labels by RFID, so its geometry, scale, settings and fault columns cannot be filled without
-genuine DYMO stock. That is a purchasing decision rather than an engineering one, and it is
-worth weighing before a DYMO goes into a venue kit: the labels are the recurring cost and
-third-party is not an option. Everything else about it is measured and in the tables above.</p>
+<p><strong>The DYMO enforces genuine media, and that is a purchasing fact.</strong> It
+printed correctly on genuine 30252 stock and refused third-party labels outright by RFID, so
+consumables are a locked-in recurring cost rather than a sourcing choice. Worth weighing before
+a DYMO goes into a venue kit. Its settings and fault columns are still open, and unlike the
+others its usable page is tiny: 25.31 &times; 81.53 mm after margins, which is why the card
+generator needed a narrow layout at all.</p>
 <p>The ZD621 still needs calipers on its label and its fault behaviour induced. The resolution
 floor is worth measuring on the other three too, now that the ZD621 has shown there is one: it
 takes no new media, only a closer look at cards already printed, and it would settle whether
