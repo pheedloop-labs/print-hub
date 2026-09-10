@@ -1,0 +1,50 @@
+{
+  "_comment": [
+    "The bench fleet. Each entry pairs a queue with the card authored for its",
+    "own imageable area and the blob captured after configuring it by hand.",
+    "All three have to travel together: a card authored for another device is",
+    "clipped or rescaled, and an unpinned job inherits whatever the driver UI",
+    "was last set to. See CLAUDE.MD, Verified 18, 43, 47 and 56.",
+    "",
+    "Read by stress_all.py and by the hub's /demo route. Paths use forward",
+    "slashes on purpose; Windows accepts them and JSON does not have to escape",
+    "them."
+  ],
+  "printers": [
+    {
+      "name": "zc10l",
+      "queue": "HUB-CARD",
+      "card": "C:/hub/test-card-140x88.pdf",
+      "devmode": "C:/hub/devmode/HUB-CARD.restore.devmode",
+      "note": "Zebra ZC10L card printer, 300 dpi, 140 x 88 mm PVC. Blob is zoom 100"
+    },
+    {
+      "name": "ql800",
+      "queue": "Brother QL-800",
+      "card": "C:/hub/test-card-83.98x58.92.pdf",
+      "devmode": "C:/hub/devmode/QL800.62mm-blackred.devmode",
+      "note": "Brother QL-800, 300 dpi, 62 mm continuous DK. Blob restores the 62 mm form"
+    },
+    {
+      "name": "c4000u",
+      "queue": "EPSON CW-C4000u (Copy 1)",
+      "card": "C:/hub/test-card-101.97x301.99.pdf",
+      "devmode": "C:/hub/devmode/C4000u.102x302-autocut.devmode",
+      "note": "EPSON CW-C4000u, 600 dpi, 102 x 302 mm badge stock. Blob has auto-cut ON"
+    },
+    {
+      "name": "zd621",
+      "queue": "ZDesigner ZD621-203dpi ZPL",
+      "card": "C:/hub/test-card-87.96x76.19.pdf",
+      "devmode": "C:/hub/devmode/ZD621.88x76-mark-cut.devmode",
+      "note": "Zebra ZD621, 203 dpi, 88 x 76 mm mark sensed. Blob has cut ON"
+    },
+    {
+      "name": "dymo550",
+      "queue": "DYMO LabelWriter 550 Turbo",
+      "card": "C:/hub/test-card-25.31x81.53.pdf",
+      "devmode": "C:/hub/devmode/DYMO550.30252-address.devmode",
+      "note": "DYMO 550 Turbo, 300 dpi, 30252 address label. Genuine media only"
+    }
+  ]
+}
