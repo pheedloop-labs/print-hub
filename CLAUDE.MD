@@ -978,6 +978,71 @@ even though it is reactive.
   change to expose all of this. `status: 16` is out of cards, `8` jammed,
   `262144` no ribbon, `4194304` cover open.
 
+## Architecture direction: the hub is the fallback, not the universal path
+
+Set by the operator after the QL-800 fault work. Recorded here because it
+changes what this rig is for, and therefore which findings matter.
+
+**Direct vendor SDK where one exists. The Windows hub only where none
+does.** PheedLoop already connects the OnSite app straight to the EPSON
+ColorWorks, so the pattern is proven in the product rather than
+hypothetical. Brother publishes an SDK too, so the QL-800 is a candidate for
+the same treatment.
+
+What that does to this spike's conclusions:
+
+- **The hub's target set narrows to printers with no usable SDK**, which
+  today means the ZC10L card printer. That is the best-behaved driver
+  tested: it names four faults through the API and recovers automatically.
+  Verified 38 to 41, the whole QL-800 catalogue of dialogs and silent
+  discards, stops being the hub's problem if the Brother goes direct.
+- The narrowing is good news. The hub does not have to be a universal
+  Windows print layer, which is the version of it that the driver diversity
+  work was making look expensive.
+- It also redirects the remaining printer testing. A ZD621 or DYMO 550 is
+  only worth putting through the hub if it would actually ship that way.
+  Both have their own direct paths, and Zebra label printers speak ZPL, so
+  the honest question for each is "SDK or hub", asked before any driver work.
+
+**Verify first, because it gates the whole idea: can an iPad reach a QL-800
+at all?** This unit is on USB003 and Brother's networked models are
+different part numbers. If the QL-800 is USB-only then no direct app
+connection is possible without changing the hardware, and the SDK path
+applies to a QL-820NWB or similar instead. Check that before any SDK work.
+Also confirm the SDK reports faults *with attribution*, since the Windows
+driver's generic `ERROR` is the thing being escaped.
+
+### The display, and what it can honestly say
+
+A display on the hub is the right surface for errors, and it works
+**because** the ZC10L names its faults. `/queue` already returns the status
+integer, so no rig change is owed.
+
+Two limits it must respect, both measured:
+
+1. **It can never show "ready".** No fault is visible while the queue is
+   idle, so a green light would be a lie. It shows the last job's outcome.
+2. **It only speaks for printers the hub is in the path of.** A badge sent
+   direct from the app to an Epson never touches the hub, so the hub's
+   display cannot report its errors. Error surfacing has to follow the print
+   path, which means the direct-SDK printers need the app to surface their
+   own faults.
+
+### "We've sent your badge to the printer" is the right wording
+
+The app staying naive is correct, and design rule 2 is now evidence rather
+than caution: `sent` is the only word the API can support. The rig returned
+`state: sent` with correct geometry for a printer that was physically
+unplugged.
+
+One gap worth closing cheaply. The error appears on the hub's display, and
+the person who sent the badge is at an iPad, possibly not looking at it. So
+**have the app poll the hub a few seconds after sending.** The ZC10L reports
+a fault about a second after the job arrives, so a poll at three to five
+seconds catches it, and the app can follow "sent" with "the printer reported
+no cards" without ever claiming a badge exists. That keeps the honest
+wording and still tells the person the thing they need to know.
+
 ## Later tasks, in order
 
 1. Move rendering into a child process. PDFium runs in-process today, so a
