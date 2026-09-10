@@ -1,0 +1,488 @@
+<title>Print Hub Spike Findings</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #f4f6f5;
+    --surface: #ffffff;
+    --surface-sunk: #eaeeec;
+    --line: #d5dbd9;
+    --line-strong: #b6c0bd;
+    --ink: #111a1d;
+    --ink-soft: #45565b;
+    --ink-mute: #6d7f84;
+    --cyan: #0a6b86;
+    --cyan-soft: #e2f0f4;
+    --magenta: #a3175a;
+    --magenta-soft: #fae7ef;
+    --go: #2c6f49;
+    --go-soft: #e3efe8;
+    --watch: #a2620b;
+    --watch-soft: #f8eeda;
+    --shadow: 0 1px 2px rgba(17, 26, 29, .06), 0 8px 24px -16px rgba(17, 26, 29, .22);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1417;
+      --surface: #141d21;
+      --surface-sunk: #10181b;
+      --line: #242f34;
+      --line-strong: #35444a;
+      --ink: #e3eaec;
+      --ink-soft: #a8b8bd;
+      --ink-mute: #7e9096;
+      --cyan: #56b3ce;
+      --cyan-soft: #12303a;
+      --magenta: #ec7ba9;
+      --magenta-soft: #381524;
+      --go: #6cba8c;
+      --go-soft: #14291d;
+      --watch: #d9a244;
+      --watch-soft: #2e2110;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1417;
+    --surface: #141d21;
+    --surface-sunk: #10181b;
+    --line: #242f34;
+    --line-strong: #35444a;
+    --ink: #e3eaec;
+    --ink-soft: #a8b8bd;
+    --ink-mute: #7e9096;
+    --cyan: #56b3ce;
+    --cyan-soft: #12303a;
+    --magenta: #ec7ba9;
+    --magenta-soft: #381524;
+    --go: #6cba8c;
+    --go-soft: #14291d;
+    --watch: #d9a244;
+    --watch-soft: #2e2110;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 52px;
+  }
+  .prose { max-width: 66ch; }
+
+  h1, h2, h3, .eyebrow, .chip, th, .kicker, .lbl, .qn {
+    font-family: Archivo, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  .eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--cyan); margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(32px, 5.4vw, 46px); font-weight: 700; line-height: 1.06;
+    letter-spacing: -.022em; margin: 0 0 18px; text-wrap: balance;
+  }
+  h2 {
+    font-size: 13px; font-weight: 700; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--ink-mute);
+    margin: 0 0 22px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
+  }
+  h3 {
+    font-size: 19px; font-weight: 600; letter-spacing: -.01em;
+    margin: 0; text-wrap: balance;
+  }
+  p { margin: 0 0 .85em; }
+  p:last-child { margin-bottom: 0; }
+
+  .standfirst { font-size: 19.5px; line-height: 1.48; color: var(--ink-soft); }
+
+  a { color: var(--cyan); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 2px; }
+
+  code, pre, .mono { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace; }
+  code {
+    font-size: .855em; background: var(--surface-sunk);
+    border: 1px solid var(--line); border-radius: 3px;
+    padding: .08em .34em; word-break: break-word;
+  }
+
+  .masthead { border-bottom: 2px solid var(--ink); padding-bottom: 26px; }
+  .facts {
+    list-style: none; margin: 26px 0 0; padding: 0; display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 18px 28px;
+  }
+  .facts div {
+    font-family: Archivo, sans-serif; font-size: 11px; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--ink-mute);
+    margin-bottom: 3px;
+  }
+  .facts span { font-size: 16px; line-height: 1.35; display: block; }
+
+  .verdict {
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-top: 4px solid var(--go);
+    border-radius: 4px;
+    padding: 30px 32px;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 15px;
+  }
+  .verdict .kicker {
+    font-size: 12px; font-weight: 700; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--go); margin: 0;
+  }
+  .verdict h3 { font-size: 24px; }
+  .verdict p { max-width: 64ch; }
+
+  .chip {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; padding: 3px 8px; border-radius: 2px;
+    white-space: nowrap; display: inline-block;
+  }
+  .chip.ans  { background: var(--go-soft); color: var(--go); }
+  .chip.part { background: var(--watch-soft); color: var(--watch); }
+  .chip.open { background: var(--surface-sunk); color: var(--ink-mute); border: 1px solid var(--line); }
+  .chip.crit { background: var(--magenta-soft); color: var(--magenta); }
+
+  .ledger {
+    display: flex; flex-direction: column; border: 1px solid var(--line);
+    border-radius: 4px; background: var(--surface); overflow: hidden;
+  }
+  .qrow { display: grid; grid-template-columns: 40px 1fr; border-bottom: 1px solid var(--line); }
+  .qrow:last-child { border-bottom: 0; }
+  .qn {
+    font-size: 13px; font-weight: 700; color: var(--ink-mute);
+    background: var(--surface-sunk); border-right: 1px solid var(--line);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding-top: 19px; font-variant-numeric: tabular-nums;
+  }
+  .qbody { padding: 17px 20px 19px; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+  .qhead { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; }
+  .qhead .q {
+    font-size: 16.5px; font-weight: 600; font-family: Archivo, sans-serif;
+    letter-spacing: -.005em;
+  }
+  .qbody p { font-size: 16px; color: var(--ink-soft); margin: 0; max-width: 62ch; }
+  .qbody p strong { color: var(--ink); font-weight: 600; }
+
+  .faults { display: grid; gap: 20px; }
+  @media (min-width: 700px) { .faults { grid-template-columns: 1fr 1fr; } }
+  .col {
+    border: 1px solid var(--line); border-radius: 4px;
+    background: var(--surface); overflow: hidden;
+  }
+  .col > .kicker {
+    margin: 0; padding: 13px 18px; font-size: 11.5px; font-weight: 700;
+    letter-spacing: .11em; text-transform: uppercase;
+    border-bottom: 1px solid var(--line); background: var(--surface-sunk);
+    font-family: Archivo, sans-serif;
+  }
+  .col.can > .kicker { color: var(--go); }
+  .col.cant > .kicker { color: var(--magenta); }
+  .col ul { list-style: none; margin: 0; padding: 0; }
+  .col li { padding: 13px 18px; border-bottom: 1px solid var(--line); font-size: 15.5px; }
+  .col li:last-child { border-bottom: 0; }
+  .col li .m {
+    font-family: "IBM Plex Mono", monospace; font-size: 12.5px;
+    color: var(--ink-mute); display: block; margin-top: 3px;
+  }
+
+  .tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 15.5px; min-width: 540px; }
+  th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th {
+    font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-mute); background: var(--surface-sunk); white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.num {
+    font-family: "IBM Plex Mono", monospace; font-size: 13.5px;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  td.ok { color: var(--go); }
+
+  .note {
+    border-left: 3px solid var(--watch); background: var(--surface);
+    padding: 15px 18px; border-radius: 0 4px 4px 0; font-size: 16px;
+  }
+  .note.hard { border-left-color: var(--magenta); }
+  .note strong { font-family: Archivo, sans-serif; font-size: 14px; letter-spacing: .01em; }
+  .note p { max-width: 64ch; }
+
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .stack > .item { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: start; }
+  .stack > .item > p { margin: 0; font-size: 16px; max-width: 60ch; }
+
+  ul.plain { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 10px; }
+  ul.plain li::marker { color: var(--line-strong); }
+  ul.plain li { max-width: 64ch; }
+
+  footer { border-top: 1px solid var(--line); padding-top: 22px; font-size: 14px; color: var(--ink-mute); }
+  footer a { color: var(--ink-soft); }
+
+  @media (max-width: 560px) {
+    .qrow { grid-template-columns: 1fr; }
+    .qn { justify-content: flex-start; padding: 10px 20px 0; border-right: 0; background: none; }
+    .qbody { padding: 6px 20px 18px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Spike memo · PheedLoop OnSite · 9 September 2026</p>
+    <h1>Windows Print Hub: spike results</h1>
+    <p class="standfirst prose">This spike answers four of the eight questions. Both gating spikes passed. The agent prints correct cards with no user logged in. The four open questions are about hardware and venues. They are not about Windows printing.</p>
+    <ul class="facts">
+      <li><div>Hardware</div><span>Zebra ZC10L, mini PC, Windows 11</span></li>
+      <li><div>Answered</div><span>Questions 1 to 4</span></li>
+      <li><div>Open</div><span>Questions 5 to 8</span></li>
+      <li><div>Cards used</div><span>11</span></li>
+    </ul>
+  </header>
+
+  <section>
+    <h2>Recommendation</h2>
+    <div class="verdict">
+      <p class="kicker">Build the agent. Do not buy a bridge.</p>
+      <h3>Both gating spikes passed. A cloud relay in the print path is now an unnecessary risk.</h3>
+      <p>The plan defined this test. If spikes 1 and 2 failed, we rent PrintNode for a season. Both spikes passed. A <code>LocalSystem</code> service printed a correct card after a reboot. No user logged in. Another machine on the LAN sent the job.</p>
+      <p>Two limits apply. The agent cannot tell the iPad that the printer is ready. Question 4 explains this limit. Questions 5 to 8 are open. This spike does not show that one person can configure a screenless box at a venue.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The eight questions</h2>
+    <div class="ledger">
+
+      <div class="qrow">
+        <div class="qn">1</div>
+        <div class="qbody">
+          <div class="qhead">
+            <span class="q">Does a service print with no user logged in?</span>
+            <span class="chip part">Partial · one driver of two</span>
+          </div>
+          <p><strong>Yes, for the ZC10L.</strong> <code>nssm</code> registered the agent as a <code>LocalSystem</code> service. Machine-scope variables reached the service. The box rebooted. No user logged in. A <code>curl</code> command from a second machine printed a card.</p>
+          <p>The queues are machine-wide. <code>HUB-CARD</code> is in <code>HKLM</code>. Its <code>PER_USER</code> attribute is clear. No per-user queue exists to hide a fault.</p>
+          <p>Two limits apply. Windows Automatic Restart Sign-On authenticated the account 18 seconds after boot and then locked the screen. Session 1 existed, but no person logged in. This is also the production condition, because that feature is on by default. Nobody tested the Canon CX-G6400, because that printer is not on the desk.</p>
+        </div>
+      </div>
+
+      <div class="qrow">
+        <div class="qn">2</div>
+        <div class="qbody">
+          <div class="qhead">
+            <span class="q">Can a stored settings blob reproduce a hand-configured print?</span>
+            <span class="chip ans">Answered · 0.00 mm</span>
+          </div>
+          <p><strong>Yes. The limit was 0.5 mm. The result is 0.00 mm on both targets.</strong> The blob is also necessary, not optional.</p>
+          <p>The settings blob for the queue is 6056 bytes. The driver keeps 5836 of those bytes private. The agent copies and replays the private bytes in both directions. One test moved the vendor <code>Zoom</code> setting between 100 and 105. Four private bytes changed with it.</p>
+          <p>The design changed. A write to the queue default does not hold on this driver. The write reports success, and a read returns the correct value. The driver then restores its own settings after about ten seconds. The agent must pass the blob to <code>CreateDC</code> for each job. The plan's original method was correct.</p>
+        </div>
+      </div>
+
+      <div class="qrow">
+        <div class="qn">3</div>
+        <div class="qbody">
+          <div class="qhead">
+            <span class="q">Which renderer ships, and under which licence?</span>
+            <span class="chip ans">Answered · PDFium</span>
+          </div>
+          <p><strong>PDFium, through the <code>pypdfium2</code> wheel.</strong> PDFium is BSD-3. The binding is Apache-2.0. The GPLv3 dependency is gone.</p>
+          <p>The licence was not the deciding factor. SumatraPDF 3.6.1 cannot print to this queue at all. It fails with <code>Printer with given name doesn't exist</code>. It fails for every settings string, for every flag, and with no settings.</p>
+          <p>The same GDI path works, and the same PDF prints from the driver dialog. SumatraPDF also cannot accept a settings blob. Question 2 requires that. Two separate reasons exclude it.</p>
+        </div>
+      </div>
+
+      <div class="qrow">
+        <div class="qn">4</div>
+        <div class="qbody">
+          <div class="qhead">
+            <span class="q">Which failures can the agent detect, and which must staff see?</span>
+            <span class="chip ans">Answered</span>
+          </div>
+          <p><strong>The driver names four faults correctly in about one second.</strong> It names them only while a job waits in the queue. The next section gives the list. One fact matters more than the list. An idle queue reports a healthy printer for every physical fault.</p>
+        </div>
+      </div>
+
+      <div class="qrow">
+        <div class="qn">5</div>
+        <div class="qbody">
+          <div class="qhead">
+            <span class="q">Can one person configure the box with only a phone?</span>
+            <span class="chip open">Open · not tested</span>
+          </div>
+          <p>Nobody tested the bootstrap ladder. One fact helps. The Wi-Fi profile is an All User Profile, so the box had a network before any user logged in. A per-user profile gives no network after a reboot. That failure looks like a service fault, not a network fault.</p>
+        </div>
+      </div>
+
+      <div class="qrow">
+        <div class="qn">6</div>
+        <div class="qbody">
+          <div class="qhead">
+            <span class="q">Does wireless-venue support enter v1?</span>
+            <span class="chip open">Open · needs question 5</span>
+          </div>
+          <p>Question 5 must come first. This decision remains the largest scope lever in the project.</p>
+        </div>
+      </div>
+
+      <div class="qrow">
+        <div class="qn">7</div>
+        <div class="qbody">
+          <div class="qhead">
+            <span class="q">Which mini PC, and does its BIOS restore power?</span>
+            <span class="chip open">Open</span>
+          </div>
+          <p>The test box is a mini PC, and it did all the work. Nobody fixed a part number. Nobody checked the BIOS power-restore setting by hand. An unattended box needs that setting.</p>
+        </div>
+      </div>
+
+      <div class="qrow">
+        <div class="qn">8</div>
+        <div class="qbody">
+          <div class="qhead">
+            <span class="q">C# or Python, and who owns it?</span>
+            <span class="chip open">Open · more evidence now</span>
+          </div>
+          <p>This remains a maintainership decision. The spike adds detail about the work. The print code is small. The difficult code calls <code>DocumentProperties</code>, <code>SetPrinter</code>, <code>CreateDC</code> and <code>StretchDIBits</code> through <code>ctypes</code>. Python must define Win32 structures by hand. C# reaches the same functions with less code.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Question 4 — what the iPad can promise</h2>
+    <div class="prose" style="margin-bottom:22px">
+      <p>The team caused four faults on the printer. A monitor read three sources twice each second. Each latency starts when the print request arrives.</p>
+    </div>
+
+    <div class="faults">
+      <div class="col can">
+        <p class="kicker">The agent detects and names these</p>
+        <ul>
+          <li>The hopper is empty
+            <span class="m">PAPER_OUT · WMI NoPaper · 0.7 s</span></li>
+          <li>The ribbon is out
+            <span class="m">NO_TONER · WMI NoToner · 1.0 s</span></li>
+          <li>A card is jammed
+            <span class="m">PAPER_JAM · WMI Jammed · 0.9 s</span></li>
+          <li>The cover is open
+            <span class="m">DOOR_OPEN · WMI DoorOpen · immediate, and visible when idle</span></li>
+        </ul>
+      </div>
+      <div class="col cant">
+        <p class="kicker">Staff must see these</p>
+        <ul>
+          <li>The printer is off, or the cable is out
+            <span class="m">the spooler status never changes · only WMI WorkOffline, after 20 s · no cause</span></li>
+          <li>Any fault while no job waits in the queue
+            <span class="m">a jammed printer with a lit error light reported Normal</span></li>
+          <li>A card printed wrongly
+            <span class="m">no signal exists</span></li>
+          <li>A card reached the tray, or did not
+            <span class="m">the job leaves the queue the same way</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="note hard" style="margin-top:22px">
+      <strong>No pre-flight check exists.</strong>
+      <p>Every consumable fault reported a healthy queue until the agent sent a job. So the agent cannot tell staff that the printer is ready. It can only report that the last card failed, and give the cause.</p>
+    </div>
+
+    <div class="note" style="margin-top:16px">
+      <strong>The word <code>sent</code> is correct.</strong>
+      <p>The agent returned <code>state: sent</code> with correct geometry for a printer with no USB cable. The rule against the word <code>printed</code> is now a measured result.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Measurements</h2>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>Measurement</th><th>Result</th><th>Condition</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>100 mm target, calipers</td><td class="num ok">100.00 mm</td><td>on PVC, blob applied</td></tr>
+          <tr><td>50 mm target, calipers</td><td class="num ok">50.00 mm</td><td>same card</td></tr>
+          <tr><td>Code print against hand print</td><td class="num ok">0.00 mm</td><td>the limit was 0.5 mm</td></tr>
+          <tr><td>Print with no blob, driver zoom at 105</td><td class="num">5% too large</td><td>silent — every value the agent reported looked correct</td></tr>
+          <tr><td>Settings blob</td><td class="num">6056 B</td><td>the driver keeps 5836 bytes private</td></tr>
+          <tr><td>Recovery after a hopper refill</td><td class="num">1.4 s</td><td>the agent does not send the job again</td></tr>
+          <tr><td>Recovery after a jam or a ribbon change</td><td class="num">34–40 s</td><td>the printer restarts. Raise no alarm inside one minute</td></tr>
+          <tr><td>Job held with the cable out</td><td class="num">&gt;2 min</td><td>the card printed 2.3 s after the operator fitted the cable</td></tr>
+          <tr><td>Time a job stays visible</td><td class="num">1.4 s</td><td>a poll slower than 1 s misses the job</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Corrections to the plan</h2>
+    <div class="prose" style="margin-bottom:20px">
+      <p>Each error below cost time. The plan document is still the reference for other engineers.</p>
+    </div>
+    <div class="stack">
+      <div class="item">
+        <span class="chip crit">Media size</span>
+        <p>The stock is 3.5 in wide and 5.5 in high. The plan states 5.5 × 3.46 in. Author every page at <strong>140 × 88 mm landscape</strong>. That size prints correctly. Calipers confirm it.</p>
+      </div>
+      <div class="item">
+        <span class="chip crit">Renderer</span>
+        <p>The plan expects SumatraPDF to answer spike 3 in one morning. SumatraPDF cannot print to this printer. The diagnosis took most of the first session. Its error message states the wrong cause, and a false printer name gives the same message.</p>
+      </div>
+      <div class="item">
+        <span class="chip crit">Rig code</span>
+        <p>The <code>/printers</code> example reads <code>p[2]</code> from the <code>EnumPrinters</code> result. Level 4 returns dicts in this build, not tuples. The route raised <code>KeyError: 2</code>. Only the Session 0 test called that route.</p>
+      </div>
+      <div class="item">
+        <span class="chip ans">Correct</span>
+        <p>Spike 2's method is correct. Save the raw bytes. Pass them back for each print. The other option writes them to the queue default, and that option fails on this hardware.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Changes needed before release</h2>
+    <ul class="plain prose">
+      <li><strong>Render each PDF in a child process.</strong> PDFium runs inside the agent process now. One bad PDF stops the whole service, and the service runs with no operator present.</li>
+      <li><strong>Add authentication.</strong> The agent starts automatically and listens on every interface. Any host that reaches port 8080 prints a card. A lab accepts this. A venue network does not.</li>
+      <li><strong>Write the dedupe log to disk.</strong> The log is in memory. The process now survives a reboot. A repeated <code>job_id</code> after a restart prints a second card.</li>
+      <li><strong>Pass the settings blob for each job, then verify it.</strong> An invalid blob is silent. The driver discards it, substitutes its own settings, and reports success. Read the value back and compare.</li>
+      <li><strong>Poll the printer status, not the job status.</strong> A job reports <code>PRINTING</code> while the printer is empty or jammed.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Work needed to close the rest</h2>
+    <div class="prose">
+      <p>The four open questions need hardware and a venue. They do not need more Windows research.</p>
+      <p>Half a day repeats spikes 1 and 2 on the Canon, and that completes question 1. One day tests the bootstrap ladder, and question 6 then follows from the result. Half a day covers the purchase work and a manual BIOS check for question 7. Question 8 needs a conversation, not a spike.</p>
+      <p>Question 4 also changes the iPad design. Staff cannot get a ready light. The agent reports a failure cause in about one second. Design the interface around that message.</p>
+    </div>
+  </section>
+
+  <footer>
+    <p>Evidence in the spike repository: <code>spike4-timeline.txt</code> for the fault timings, <code>CLAUDE.md</code> for the full findings and the implementation traps, and the commit history for each conclusion. Companion document: the <a href="https://claude.ai/code/artifact/a107db7a-78a7-4e59-8bc1-d917c5537ca4">Windows Print Hub Spike</a> plan. Written to ASD-STE100 Simplified Technical English.</p>
+  </footer>
+
+</div>
