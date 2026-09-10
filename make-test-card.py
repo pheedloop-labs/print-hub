@@ -39,8 +39,12 @@ HT = float(args[2]) if len(args) >= 3 else 100.0
 VT = float(args[3]) if len(args) >= 4 else 50.0
 
 M = 5.0            # margin to the registration crosses
-RIGHT = 14.0       # right-hand column, the vertical target's alone
 ARM = 3.0          # caliper tick arm half-length
+
+# The vertical target's column was a flat 14 mm, which is a quarter of a
+# 58 mm DYMO label and left nothing for content. Scale it, with a floor that
+# still clears the tick arms.
+RIGHT = min(14.0, max(8.5, W * 0.17))
 CONTENT = W - M - RIGHT                     # right edge of the content column
 
 # Ordered hardest-first on purpose. Trimming drops from the end, so a short
@@ -101,6 +105,14 @@ if used < H:
 if n_line < len(LINE_WIDTHS) or n_text < len(TEXT_SIZES):
     print(f"page is {H:g} mm, needs {used:.1f}: ladders trimmed to "
           f"{n_line} line widths and {n_text} text sizes")
+
+# Refuse rather than emit an unmeasurable card. At 25 mm wide this file used
+# to write a 0 mm caliper target and negative-width colour patches that ran
+# off the page edge, and report success while doing it.
+if HT < 15 or VT < 15:
+    sys.exit(f"page {W:g} x {H:g} mm is too small for a measurable card: "
+             f"targets came out {HT:g} / {VT:g} mm, need 15 mm minimum. "
+             f"Widen the media or measure with the ruler instead.")
 
 OUT = f"test-card-{W:g}x{H:g}.pdf"
 c = canvas.Canvas(OUT, pagesize=(W * mm, H * mm))
