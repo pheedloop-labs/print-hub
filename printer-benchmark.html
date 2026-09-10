@@ -1,0 +1,447 @@
+<title>Print Path Benchmark</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#f4f6f5; --panel:#fff; --panel-2:#eef2f0;
+  --ink:#14201c; --ink-soft:#4a5a54; --ink-faint:#7c8a85;
+  --rule:#d6dedb; --rule-hard:#b6c2bd;
+  --cyan:#0a6b86; --magenta:#a3175a; --go:#2c6f49; --watch:#a2620b;
+  --sans:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#101512; --panel:#171e1a; --panel-2:#1d2621;
+    --ink:#e8efeb; --ink-soft:#9aa8a2; --ink-faint:#71807a;
+    --rule:#2a3430; --rule-hard:#3b4842;
+    --cyan:#56b8d4; --magenta:#e8709f; --go:#6fbd8c; --watch:#d9a34a;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#101512; --panel:#171e1a; --panel-2:#1d2621;
+  --ink:#e8efeb; --ink-soft:#9aa8a2; --ink-faint:#71807a;
+  --rule:#2a3430; --rule-hard:#3b4842;
+  --cyan:#56b8d4; --magenta:#e8709f; --go:#6fbd8c; --watch:#d9a34a;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--serif);
+  font-size:16px;line-height:1.6;margin:0;padding:0 20px 80px}
+.wrap{max-width:900px;margin:0 auto}
+.wide{max-width:1240px;margin:0 auto}
+
+header{border-bottom:3px solid var(--ink);padding:44px 0 18px;margin-bottom:8px}
+.eyebrow{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--cyan);margin:0 0 14px}
+h1{font-family:var(--sans);font-weight:700;font-size:clamp(30px,5vw,46px);
+  line-height:1.04;letter-spacing:-.02em;margin:0 0 12px;text-wrap:balance}
+.standfirst{font-size:19px;line-height:1.5;color:var(--ink-soft);margin:0;max-width:60ch}
+.byline{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);
+  margin:18px 0 0;display:flex;flex-wrap:wrap;gap:6px 20px}
+
+h2{font-family:var(--sans);font-weight:600;font-size:24px;letter-spacing:-.01em;
+  margin:52px 0 4px;text-wrap:balance}
+h2 .num{color:var(--cyan);font-family:var(--mono);font-size:15px;font-weight:500;
+  margin-right:10px;vertical-align:2px}
+.sub{font-family:var(--sans);font-size:13px;color:var(--ink-faint);margin:0 0 18px}
+h3{font-family:var(--sans);font-weight:600;font-size:16px;margin:26px 0 6px}
+p{margin:0 0 14px}
+a{color:var(--cyan)}
+code,.m{font-family:var(--mono);font-size:.88em;background:var(--panel-2);
+  padding:.1em .34em;border-radius:3px}
+
+.thesis{background:var(--panel);border:1px solid var(--rule);
+  border-left:4px solid var(--cyan);padding:22px 26px;margin:28px 0 0}
+.thesis p{margin:0;font-size:18px;line-height:1.5}
+.thesis strong{color:var(--cyan)}
+
+.scroll{overflow-x:auto;margin:0 0 8px;border:1px solid var(--rule);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12.5px;
+  font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--rule);
+  white-space:nowrap;vertical-align:top}
+thead th{background:var(--panel-2);font-family:var(--sans);font-size:11px;font-weight:600;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);
+  border-bottom:2px solid var(--rule-hard)}
+tbody tr:last-child td{border-bottom:none}
+td.field{font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--ink-soft);
+  white-space:normal;min-width:190px}
+tr.group td{background:var(--panel-2);font-family:var(--sans);font-size:10.5px;
+  font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);
+  padding:6px 12px}
+caption{caption-side:top;text-align:left;font-family:var(--sans);font-size:12px;
+  color:var(--ink-faint);padding:0 0 8px}
+
+.p{display:inline-block;font-family:var(--sans);font-size:10.5px;font-weight:600;
+  letter-spacing:.04em;padding:2px 7px;border-radius:2px;border:1px solid}
+.ok{color:var(--go);border-color:var(--go)}
+.no{color:var(--magenta);border-color:var(--magenta)}
+.wa{color:var(--watch);border-color:var(--watch)}
+.un{color:var(--ink-faint);border-style:dashed;border-color:var(--ink-faint)}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px;margin:22px 0 0}
+.card{background:var(--panel);border:1px solid var(--rule);border-top:3px solid var(--rule-hard);
+  padding:16px 18px}
+.card.yes{border-top-color:var(--go)}
+.card.partial{border-top-color:var(--watch)}
+.card.nope{border-top-color:var(--magenta)}
+.card.untested{border-top-color:var(--ink-faint)}
+.card h4{font-family:var(--sans);font-size:14.5px;font-weight:700;margin:0 0 2px}
+.card .who{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);margin:0 0 10px}
+.card .v{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.05em;
+  text-transform:uppercase;margin:0 0 8px}
+.card.yes .v{color:var(--go)}
+.card.partial .v{color:var(--watch)}
+.card.nope .v{color:var(--magenta)}
+.card.untested .v{color:var(--ink-faint)}
+.card p{font-size:13.5px;line-height:1.45;margin:0;color:var(--ink-soft)}
+
+.finding{border-top:1px solid var(--rule);padding:18px 0 2px}
+.finding .tag{font-family:var(--sans);font-size:10.5px;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;margin:0 0 4px}
+.finding.gen .tag{color:var(--go)}
+.finding.local .tag{color:var(--magenta)}
+.finding h3{margin:0 0 6px}
+.finding p{font-size:15px;margin:0 0 10px;max-width:70ch}
+
+ol.proc{counter-reset:s;list-style:none;padding:0;margin:18px 0 0}
+ol.proc>li{counter-increment:s;position:relative;padding:0 0 16px 42px;
+  border-left:1px solid var(--rule);margin-left:13px}
+ol.proc>li:last-child{border-left-color:transparent}
+ol.proc>li::before{content:counter(s);position:absolute;left:-13px;top:0;
+  width:26px;height:26px;border-radius:50%;background:var(--panel);
+  border:1px solid var(--rule-hard);color:var(--cyan);font-family:var(--mono);
+  font-size:12px;font-weight:600;display:grid;place-items:center}
+ol.proc>li>strong{font-family:var(--sans);font-size:15px;display:block;margin:2px 0 4px}
+ol.proc>li p{font-size:14.5px;margin:0 0 6px;color:var(--ink-soft);max-width:66ch}
+pre{font-family:var(--mono);font-size:12px;background:var(--panel);border:1px solid var(--rule);
+  padding:10px 12px;overflow-x:auto;margin:0 0 8px;line-height:1.5}
+footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
+  font-family:var(--mono);font-size:11.5px;color:var(--ink-faint)}
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">PheedLoop print hub &middot; spike bench record</p>
+  <h1>Print Path Benchmark</h1>
+  <p class="standfirst">Four printers driven through one Windows print path, measured on the
+  same rig with the same PDF. What each driver reports, what it actually does, and where the
+  two disagree.</p>
+  <p class="byline">
+    <span>PHEEDLOOP-LABS &middot; Windows 11 Pro 26200</span>
+    <span>PDFium via pypdfium2</span>
+    <span>updated 2026-09-10</span>
+    <span>living document, printers added as they land</span>
+  </p>
+</header>
+
+<div class="thesis">
+  <p>One pattern organises every result here. <strong>Everything about getting bytes onto
+  media generalises. Nothing about knowing what happened does.</strong> Scale, colour and
+  vendor settings behaved the same way once pinned, on all three printers tested end to end.
+  Fault reporting, attribution and recovery differed so completely between two printers from
+  the same vendor that no shared promise survives.</p>
+</div>
+</div>
+
+<div class="wide">
+<h2><span class="num">01</span>Can the hub drive it unattended?</h2>
+<p class="sub">The question that decides whether a printer needs the Windows agent or a direct vendor SDK.</p>
+<div class="cards">
+  <div class="card yes">
+    <h4>Zebra ZC10L</h4>
+    <p class="who">HUB-CARD &middot; USB001 &middot; 300 dpi</p>
+    <p class="v">Viable</p>
+    <p>Names four faults through the API, recovers automatically, no dialogs. The
+    best-behaved driver tested, and the one with no SDK alternative.</p>
+  </div>
+  <div class="card nope">
+    <h4>Brother QL-800</h4>
+    <p class="who">USB003 &middot; 300 dpi</p>
+    <p class="v">Not unattended</p>
+    <p>A modal dialog sits in the print path and holds the only working Resume. No
+    programmatic recovery found. A stuck job blocks the queue.</p>
+  </div>
+  <div class="card partial">
+    <h4>EPSON CW-C4000u</h4>
+    <p class="who">(Copy 1) &middot; USB002 &middot; 600 dpi</p>
+    <p class="v">Prints, faults untested</p>
+    <p>Cleanest geometry of the four and the only honest colour device. Auto-cut proven to
+    replay both ways. Fault behaviour not yet induced.</p>
+  </div>
+  <div class="card untested">
+    <h4>Zebra ZD621</h4>
+    <p class="who">ZPL driver &middot; USB004 &middot; 203 dpi</p>
+    <p class="v">Installed only</p>
+    <p>Enumerates with 13482 private bytes. No media configured, nothing printed. Also
+    speaks ZPL, so a raw path may bypass all of this.</p>
+  </div>
+</div>
+
+<h2><span class="num">02</span>What the drivers report</h2>
+<p class="sub">Collected by <span class="m">benchmark.py</span>. Read only, no media, no dialogs, so every figure here is free to reproduce.</p>
+<div class="scroll">
+<table>
+  <caption>Objective fields: anything a driver will tell you without printing.</caption>
+  <thead><tr><th>Field</th><th>Zebra ZC10L</th><th>Brother QL-800</th><th>EPSON CW-C4000u</th><th>Zebra ZD621</th></tr></thead>
+  <tbody>
+    <tr class="group"><td colspan="5">Identity</td></tr>
+    <tr><td class="field">Driver</td><td>Zebra ZC10L USB Card Printer</td><td>Brother QL-800</td><td>EPSON CW-C4000u</td><td>ZDesigner ZD621-203dpi ZPL</td></tr>
+    <tr><td class="field">Port</td><td>USB001</td><td>USB003</td><td>USB002</td><td>USB004</td></tr>
+    <tr><td class="field">Resolution</td><td>300 dpi</td><td>300 dpi</td><td><strong>600 dpi</strong></td><td>203 dpi</td></tr>
+    <tr class="group"><td colspan="5">DEVMODE, in bytes</td></tr>
+    <tr><td class="field">Public</td><td>220</td><td>220</td><td>220</td><td>220</td></tr>
+    <tr><td class="field">Vendor-private</td><td>5836</td><td><strong>320</strong></td><td><strong>30320</strong></td><td>13482</td></tr>
+    <tr><td class="field">Total</td><td>6056</td><td>540</td><td>30540</td><td>13702</td></tr>
+    <tr class="group"><td colspan="5">Media model</td></tr>
+    <tr><td class="field">Forms reported</td><td>1</td><td><strong>58</strong></td><td>3</td><td>1</td></tr>
+    <tr><td class="field">Form in use</td><td>140x88mm (276)</td><td>62mm (259)</td><td>Custom (256)</td><td>Custom (256)</td></tr>
+    <tr><td class="field">Min extent, mm</td><td>53.7 &times; 156.1</td><td>12.0 &times; 12.0</td><td>21.4 &times; 8.0</td><td>15.0 &times; 6.3</td></tr>
+    <tr><td class="field">Max extent, mm</td><td>156.1 &times; 232.0</td><td>238.8 &times; 1000.0</td><td>108.0 &times; 406.4</td><td>108.0 &times; 999.6</td></tr>
+    <tr><td class="field">Bins</td><td>&mdash;</td><td>Normal</td><td>Roll Paper</td><td>Manual feed</td></tr>
+    <tr class="group"><td colspan="5">Colour claim</td></tr>
+    <tr><td class="field">DC_COLORDEVICE</td><td>1</td><td><strong>0</strong></td><td>1</td><td>0</td></tr>
+    <tr><td class="field">dmColor</td><td>2 colour</td><td>1 mono</td><td>2 colour</td><td>1 mono</td></tr>
+    <tr><td class="field">Claim is true?</td>
+      <td><span class="p ok">YES</span></td>
+      <td><span class="p no">NO, prints red</span></td>
+      <td><span class="p ok">YES</span></td>
+      <td><span class="p un">UNTESTED</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2><span class="num">03</span>Geometry, and what to author against</h2>
+<p class="sub">The imageable area is not the form size. Author against <span class="m">author_mm</span>, or <span class="m">noscale</span> means nothing.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Field</th><th>Zebra ZC10L</th><th>Brother QL-800</th><th>EPSON CW-C4000u</th><th>Zebra ZD621</th></tr></thead>
+  <tbody>
+    <tr><td class="field">Media tested</td><td>140 &times; 88 mm PVC card</td><td>62 mm continuous DK, black/red</td><td>102 &times; 302 mm, black mark</td><td>none yet</td></tr>
+    <tr><td class="field">Physical, px</td><td>1680 &times; 1051</td><td>1062 &times; 732</td><td>2409 &times; 7134</td><td>831 &times; 609</td></tr>
+    <tr><td class="field">Imageable, px</td><td>1680 &times; 1051</td><td><strong>992 &times; 696</strong></td><td>2409 &times; 7134</td><td>831 &times; 609</td></tr>
+    <tr><td class="field">Unprintable offset, px</td><td>0, 0</td><td><strong>35, 18</strong></td><td>0, 0</td><td>0, 0</td></tr>
+    <tr><td class="field">Full bleed possible?</td>
+      <td><span class="p ok">YES</span></td>
+      <td><span class="p no">NO, 2.96 / 1.52 mm</span></td>
+      <td><span class="p ok">YES</span></td>
+      <td><span class="p ok">YES</span></td></tr>
+    <tr><td class="field">Author page at, mm</td><td>142.23 &times; 88.98</td><td>83.98 &times; 58.92</td><td>101.98 &times; 302.00</td><td>103.97 &times; 76.19</td></tr>
+    <tr><td class="field">dpi vs mm agree at rest, mm</td>
+      <td><span class="p ok">0.24 / 0.02</span></td>
+      <td><span class="p ok">0.01 / 0.07</span></td>
+      <td><span class="p ok">0.02 / 0.01</span></td>
+      <td><span class="p ok">0.02 / 0.20</span></td></tr>
+    <tr><td class="field">Scale on media</td>
+      <td><span class="p ok">100.00 / 50.00 calipers</span></td>
+      <td><span class="p ok">operator confirmed</span></td>
+      <td><span class="p ok">confirmed, 250 mm target</span></td>
+      <td><span class="p un">UNTESTED</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2><span class="num">04</span>Settings control</h2>
+<p class="sub">Spike 2 territory. Whether a captured blob can carry a vendor-only setting, and whether it wins.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Field</th><th>Zebra ZC10L</th><th>Brother QL-800</th><th>EPSON CW-C4000u</th><th>Zebra ZD621</th></tr></thead>
+  <tbody>
+    <tr><td class="field">Private region exists</td>
+      <td><span class="p ok">5836 B</span></td><td><span class="p ok">320 B</span></td>
+      <td><span class="p ok">30320 B</span></td><td><span class="p ok">13482 B</span></td></tr>
+    <tr><td class="field">Public dmScale honoured</td>
+      <td><span class="p no">NO</span></td><td><span class="p no">NO</span></td>
+      <td><span class="p no">NO</span></td><td><span class="p un">UNTESTED</span></td></tr>
+    <tr><td class="field">SetPrinter queue default sticks</td>
+      <td><span class="p no">NO, reverts ~10 s</span></td>
+      <td><span class="p ok">YES, held 25 s</span></td>
+      <td><span class="p ok">YES, held 25 s</span></td>
+      <td><span class="p un">UNTESTED</span></td></tr>
+    <tr><td class="field">Per-job pin beats queue default</td>
+      <td><span class="p ok">YES</span></td><td><span class="p ok">YES</span></td>
+      <td><span class="p ok">YES, both directions</span></td><td><span class="p un">UNTESTED</span></td></tr>
+    <tr><td class="field">Vendor setting replayed</td>
+      <td>Zoom 100 / 105</td><td>&mdash;</td>
+      <td><strong>auto-cut on / off</strong></td><td>&mdash;</td></tr>
+    <tr><td class="field">Silent failure if the blob is stale</td>
+      <td><span class="p no">5% oversized card</span></td>
+      <td><span class="p un">UNTESTED</span></td>
+      <td><span class="p no">badge never cuts</span></td>
+      <td><span class="p un">UNTESTED</span></td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2><span class="num">05</span>What happens when it breaks</h2>
+<p class="sub">Induced on hardware, not read from a driver. This is the table where two Zebra-derived promises died.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>Field</th><th>Zebra ZC10L</th><th>Brother QL-800</th><th>EPSON CW-C4000u</th><th>Zebra ZD621</th></tr></thead>
+  <tbody>
+    <tr><td class="field">Any fault visible while idle</td>
+      <td><span class="p wa">cover open only</span></td>
+      <td><span class="p no">NONE, reports Normal</span></td>
+      <td><span class="p un">UNTESTED</span></td><td><span class="p un">UNTESTED</span></td></tr>
+    <tr><td class="field">Fault named through the API</td>
+      <td><span class="p ok">4 distinct codes</span></td>
+      <td><span class="p no">generic ERROR only</span></td>
+      <td><span class="p un">UNTESTED</span></td><td><span class="p un">UNTESTED</span></td></tr>
+    <tr><td class="field">Media-out vs cover-open</td>
+      <td><span class="p ok">different codes</span></td>
+      <td><span class="p no">byte-identical</span></td>
+      <td><span class="p un">UNTESTED</span></td><td><span class="p un">UNTESTED</span></td></tr>
+    <tr><td class="field">Job status usable</td>
+      <td><span class="p no">lies, reads PRINTING</span></td>
+      <td><span class="p wa">carries PAUSED, ERROR</span></td>
+      <td><span class="p un">UNTESTED</span></td><td><span class="p un">UNTESTED</span></td></tr>
+    <tr><td class="field">Recovery after the fix</td>
+      <td><span class="p ok">automatic, reprints</span></td>
+      <td><span class="p no">dialog click only</span></td>
+      <td><span class="p un">UNTESTED</span></td><td><span class="p un">UNTESTED</span></td></tr>
+    <tr><td class="field">Dialog in the print path</td>
+      <td><span class="p ok">none</span></td>
+      <td><span class="p no">YES, blocks</span></td>
+      <td><span class="p un">UNTESTED</span></td><td><span class="p un">UNTESTED</span></td></tr>
+    <tr><td class="field">Stuck job blocks the queue</td>
+      <td><span class="p ok">no</span></td>
+      <td><span class="p no">YES</span></td>
+      <td><span class="p un">UNTESTED</span></td><td><span class="p un">UNTESTED</span></td></tr>
+    <tr><td class="field">Fault latency after POST</td>
+      <td>0.7 to 1.0 s</td><td>3.3 to 4.6 s</td>
+      <td><span class="p un">UNTESTED</span></td><td><span class="p un">UNTESTED</span></td></tr>
+    <tr><td class="field">Confirms a badge exists</td>
+      <td><span class="p no">NO</span></td><td><span class="p no">NO</span></td>
+      <td><span class="p no">NO</span></td><td><span class="p no">NO</span></td></tr>
+  </tbody>
+</table>
+</div>
+</div>
+
+<div class="wrap">
+<h2><span class="num">06</span>What generalises, and what was Zebra all along</h2>
+<p class="sub">Six claims went into this bake-off resting on one driver. Three survived intact.</p>
+
+<div class="finding gen">
+  <p class="tag">Generalises &middot; all drivers</p>
+  <h3>Every driver has a vendor-private region, and no portable API reaches it</h3>
+  <p>320 bytes on the Brother, 5836 on the ZC10L, 13482 on the ZD621, 30320 on the Epson.
+  Nobody reports zero. Capture-and-replay is product work, not a tax that one uncertified
+  driver imposes. Public <span class="m">dmScale</span> is inert on every driver tested, the
+  ZC10L included, which is why its zoom trap is reachable only through the private bytes.</p>
+</div>
+
+<div class="finding gen">
+  <p class="tag">Generalises &middot; two vendors proven</p>
+  <h3>A per-job blob handed to CreateDC beats the queue default</h3>
+  <p>Proven on the Epson by a controlled pair. Same PDF, same queue, queue default left at
+  auto-cut on, and the only variable was the pinned blob: the pre-cut capture did not cut, the
+  auto-cut capture did. That is the cleanest experiment in the spike, and it generalises a
+  claim previously measured only on the ZC10L.</p>
+</div>
+
+<div class="finding gen">
+  <p class="tag">Generalises &middot; both directions</p>
+  <h3>A driver's self-description is evidence, not truth</h3>
+  <p>The ZC10L <em>overstates</em> resolution, reporting 315 dpi while printing at 300, and a
+  card came out 5% oversized. The Brother <em>understates</em> colour, reporting
+  <span class="m">DC_COLORDEVICE 0</span> while printing red. The same defect pointing
+  opposite ways. Never gate behaviour on a capability claim, because only media settles
+  anything.</p>
+</div>
+
+<div class="finding local">
+  <p class="tag">Zebra-specific &middot; did not generalise</p>
+  <h3>The ten-second queue-default revert</h3>
+  <p>The ZC10L re-asserts its own stored configuration and discards a
+  <span class="m">SetPrinter</span> write within about ten seconds. Brother and Epson both
+  held the same write for 25 s with no drift. Per-job pinning is still correct, because it is
+  the only approach that works everywhere, but the stated reason was wrong.</p>
+</div>
+
+<div class="finding local">
+  <p class="tag">Zebra-specific &middot; did not generalise</p>
+  <h3>Faults that name themselves, and recover on their own</h3>
+  <p>The ZC10L distinguishes out-of-cards, ribbon-out, jam and cover-open as four codes within
+  a second, and reprints itself once the fault clears. The Brother reports a single generic
+  <span class="m">ERROR</span> in which media-out and cover-open are byte-identical, needs a
+  human to click a dialog, and blocks every job behind the stuck one. So "the iPad can name
+  the actual problem to a desk" is a Zebra promise, not a Windows one.</p>
+</div>
+
+<div class="finding local">
+  <p class="tag">Zebra-specific &middot; and it was the only one</p>
+  <h3>The single pre-flight signal that ever existed</h3>
+  <p>Cover-open on the ZC10L was the one fault visible on an idle queue anywhere in this
+  spike. On the Brother nothing is visible while idle: a jam with the error light lit reports
+  <span class="m">Normal</span>. No printer here can be truthfully described as "ready", and
+  no printer here can confirm that a badge physically exists.</p>
+</div>
+
+<h2><span class="num">07</span>Adding the next printer</h2>
+<p class="sub">The reproducible sequence. Roughly twenty minutes and one or two pieces of media.</p>
+<ol class="proc">
+  <li><strong>Install the driver and name the queue</strong>
+    <p>Installers live in <span class="m">Drivers\</span>, gitignored at about 400 MB. Check
+    the queue is type <span class="m">Local</span>, which a LocalSystem service needs.</p></li>
+  <li><strong>Configure the media by hand in the vendor UI</strong>
+    <p>Unavoidable, and the reason spike 2 exists. Click through to Apply even if nothing
+    looks changed: the Epson's private geometry stayed stale at the previous form's size until
+    a second trip through its dialog.</p></li>
+  <li><strong>Read the objective fields</strong>
+    <pre>benchmark.py "&lt;queue&gt;"</pre>
+    <p>Gives resolution, private-region size, the imageable area, whether full bleed is
+    possible, and <span class="m">author_mm</span>, the page size whose PDFium raster lands
+    exactly on the imageable pixel count.</p></li>
+  <li><strong>Capture a restore point before touching anything</strong>
+    <pre>devmode.py capture "&lt;queue&gt;" devmode\&lt;name&gt;.devmode</pre></li>
+  <li><strong>Build a calibration card at that exact size</strong>
+    <pre>make-test-card.py &lt;author_w&gt; &lt;author_h&gt; &lt;h-target&gt; &lt;v-target&gt;</pre>
+    <p>Targets shrink to fit and the layout zones itself. Prefer the longest axis for the
+    vertical target: the Epson's 250 mm target is two and a half times more sensitive to a
+    proportional error than the ZC10L's 100 mm.</p></li>
+  <li><strong>Dry-run before spending media</strong>
+    <pre>pdfium_print.py "&lt;queue&gt;" &lt;card.pdf&gt; --devmode &lt;blob&gt; --dry-run</pre>
+    <p>Require <span class="m">clipped=False</span> and a scale error under 0.02 mm. This step
+    also verifies the blob resolves to sane geometry, which is the check that made a stale
+    Epson blob safe to pin.</p></li>
+  <li><strong>Print one, and have a human measure it</strong>
+    <p>Calipers on both targets. No amount of correct-looking JSON substitutes: the rig
+    reported perfect geometry for a printer that was physically unplugged.</p></li>
+  <li><strong>Break it on purpose, with the monitor running</strong>
+    <pre>spike4_monitor.py "&lt;queue&gt;" --interval 0.5</pre>
+    <p>Test each fault twice, idle and with a job in flight, because most drivers say nothing
+    until a job arrives. Induce media-out, cover-open and a USB pull. Watch for a driver
+    dialog, because that alone disqualifies a printer from unattended use.</p></li>
+  <li><strong>Prove a vendor setting replays</strong>
+    <p>Change one vendor-only setting by hand, capture a second blob,
+    <span class="m">devmode.py diff</span> them, then print with each pinned against the
+    other's queue default. Pick a setting whose failure is visible without instruments: an
+    uncut badge beats a 5% oversized card for showing a team.</p></li>
+</ol>
+
+<h2><span class="num">08</span>Open</h2>
+<p>Free, and no media: does SumatraPDF open the Brother, Epson and ZD621 queues? That settles
+how much of the renderer finding was the ZC10L being an outlier rather than the renderer being
+weak. One label each for two more: whether Brother magenta and yellow also print red, which
+decides how a two-colour badge may be authored, and whether deleting a stuck Brother job
+unblocks the queue, the one recovery route not yet ruled out.</p>
+<p>The ZD621 needs media configured and everything from step 3 down. It also speaks
+<strong>ZPL</strong>, a published and stable language, so a raw
+<span class="m">WritePrinter</span> pass-through would bypass GDI, DEVMODE and the renderer
+entirely. That is a different architecture rather than a variant of this one, and worth an
+hour before any driver work.</p>
+<p>One hazard on the bench: <span class="m">EPSON CW-C4000u</span> is enumerable by
+<span class="m">EnumPrinters</span> and absent from the Windows printer list, while
+<span class="m">(Copy 1)</span> is the working queue. Identical public fields, different private
+regions. An agent that picks a queue by enumeration can pick one that nobody can see or
+fix.</p>
+
+<footer>
+  Measured on PHEEDLOOP-LABS. The objective columns reproduce with
+  <span class="m">benchmark.py</span>; the behavioural columns were induced on hardware and are
+  recorded in <span class="m">CLAUDE.md</span>, <span class="m">spike4-timeline.txt</span> and
+  <span class="m">spike5-brother-timeline.txt</span>. Untested is marked as untested
+  throughout, never inferred.
+</footer>
+</div>
