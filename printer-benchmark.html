@@ -169,12 +169,12 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
     <p>Cleanest geometry of the four and the only honest colour device. Auto-cut proven to
     replay both ways. Fault behaviour not yet induced.</p>
   </div>
-  <div class="card untested">
+  <div class="card partial">
     <h4>Zebra ZD621</h4>
     <p class="who">ZPL driver &middot; USB004 &middot; 203 dpi</p>
-    <p class="v">Installed only</p>
-    <p>Enumerates with 13482 private bytes. No media configured, nothing printed. Also
-    speaks ZPL, so a raw path may bypass all of this.</p>
+    <p class="v">Prints, faults untested</p>
+    <p>Cut mode proven to replay on a four-byte diff, the tightest in the spike. The only
+    sub-300 dpi device here. Also speaks ZPL, so a raw path may bypass all of this.</p>
   </div>
 </div>
 
@@ -217,16 +217,16 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
 <table>
   <thead><tr><th>Field</th><th>Zebra ZC10L</th><th>Brother QL-800</th><th>EPSON CW-C4000u</th><th>Zebra ZD621</th></tr></thead>
   <tbody>
-    <tr><td class="field">Media tested</td><td>140 &times; 88 mm PVC card</td><td>62 mm continuous DK, black/red</td><td>102 &times; 302 mm, black mark</td><td>none yet</td></tr>
-    <tr><td class="field">Physical, px</td><td>1680 &times; 1051</td><td>1062 &times; 732</td><td>2409 &times; 7134</td><td>831 &times; 609</td></tr>
-    <tr><td class="field">Imageable, px</td><td>1680 &times; 1051</td><td><strong>992 &times; 696</strong></td><td>2409 &times; 7134</td><td>831 &times; 609</td></tr>
+    <tr><td class="field">Media tested</td><td>140 &times; 88 mm PVC card</td><td>62 mm continuous DK, black/red</td><td>102 &times; 302 mm, black mark</td><td>88 &times; 76 mm, mark sensed</td></tr>
+    <tr><td class="field">Physical, px</td><td>1680 &times; 1051</td><td>1062 &times; 732</td><td>2409 &times; 7134</td><td>703 &times; 609</td></tr>
+    <tr><td class="field">Imageable, px</td><td>1680 &times; 1051</td><td><strong>992 &times; 696</strong></td><td>2409 &times; 7134</td><td>703 &times; 609</td></tr>
     <tr><td class="field">Unprintable offset, px</td><td>0, 0</td><td><strong>35, 18</strong></td><td>0, 0</td><td>0, 0</td></tr>
     <tr><td class="field">Full bleed possible?</td>
       <td><span class="p ok">YES</span></td>
       <td><span class="p no">NO, 2.96 / 1.52 mm</span></td>
       <td><span class="p ok">YES</span></td>
       <td><span class="p ok">YES</span></td></tr>
-    <tr><td class="field">Author page at, mm</td><td>142.23 &times; 88.98</td><td>83.98 &times; 58.92</td><td>101.98 &times; 302.00</td><td>103.97 &times; 76.19</td></tr>
+    <tr><td class="field">Author page at, mm</td><td>142.23 &times; 88.98</td><td>83.98 &times; 58.92</td><td>101.98 &times; 302.00</td><td>87.96 &times; 76.19</td></tr>
     <tr><td class="field">dpi vs mm agree at rest, mm</td>
       <td><span class="p ok">0.24 / 0.02</span></td>
       <td><span class="p ok">0.01 / 0.07</span></td>
@@ -236,7 +236,7 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
       <td><span class="p ok">100.00 / 50.00 calipers</span></td>
       <td><span class="p ok">operator confirmed</span></td>
       <td><span class="p ok">confirmed, 250 mm target</span></td>
-      <td><span class="p un">UNTESTED</span></td></tr>
+      <td><span class="p wa">printed, calipers pending</span></td></tr>
   </tbody>
 </table>
 </div>
@@ -260,15 +260,17 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
       <td><span class="p un">UNTESTED</span></td></tr>
     <tr><td class="field">Per-job pin beats queue default</td>
       <td><span class="p ok">YES</span></td><td><span class="p ok">YES</span></td>
-      <td><span class="p ok">YES, both directions</span></td><td><span class="p un">UNTESTED</span></td></tr>
+      <td><span class="p ok">YES, both directions</span></td>
+      <td><span class="p ok">YES, both directions</span></td></tr>
     <tr><td class="field">Vendor setting replayed</td>
-      <td>Zoom 100 / 105</td><td>&mdash;</td>
-      <td><strong>auto-cut on / off</strong></td><td>&mdash;</td></tr>
+      <td>Zoom 100 / 105, 4 bytes</td><td>&mdash;</td>
+      <td>auto-cut on / off, 4 of 19 bytes</td>
+      <td><strong>cut / tear-off, 4 bytes</strong></td></tr>
     <tr><td class="field">Silent failure if the blob is stale</td>
       <td><span class="p no">5% oversized card</span></td>
       <td><span class="p un">UNTESTED</span></td>
       <td><span class="p no">badge never cuts</span></td>
-      <td><span class="p un">UNTESTED</span></td></tr>
+      <td><span class="p no">badge never cuts</span></td></tr>
   </tbody>
 </table>
 </div>
@@ -332,12 +334,28 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
 </div>
 
 <div class="finding gen">
-  <p class="tag">Generalises &middot; two vendors proven</p>
+  <p class="tag">Generalises &middot; three vendors proven</p>
   <h3>A per-job blob handed to CreateDC beats the queue default</h3>
-  <p>Proven on the Epson by a controlled pair. Same PDF, same queue, queue default left at
-  auto-cut on, and the only variable was the pinned blob: the pre-cut capture did not cut, the
-  auto-cut capture did. That is the cleanest experiment in the spike, and it generalises a
-  claim previously measured only on the ZC10L.</p>
+  <p>Proven twice by controlled pairs, with the queue default left deliberately hostile and
+  the pinned blob the only variable. The Epson cut or did not cut according to which blob was
+  pinned; so did the ZD621. The ZD621 pair is the tighter proof: its two blobs differ by
+  <strong>4 bytes out of 13702</strong> with the public section byte-identical, so no page
+  geometry is involved and only vendor flags can be carrying the behaviour.</p>
+  <p>Three vendors now hold a production-relevant setting in bytes no portable API reaches,
+  and a captured blob carries all three: ZC10L zoom, Epson auto-cut, ZD621 cut mode. Two of
+  the three moved exactly four bytes.</p>
+</div>
+
+<div class="finding gen">
+  <p class="tag">Generalises &middot; both roll-fed printers</p>
+  <h3>Roll-fed printers default to not cutting, and cut is never a DEVMODE field</h3>
+  <p>The Epson did not cut until the setting was enabled by hand, and neither did the ZD621.
+  For this class of hardware <strong>the default failure mode is a badge still attached to the
+  roll</strong>: invisible to every portable API, and carried only by the captured blob. Four
+  bytes out of 13702 separate a badge that cuts from one that does not, while both jobs report
+  <span class="m">scale_pinned: true</span>, identical geometry to 0.002 mm and byte-identical
+  JSON. A hub commissioned with a blob captured too early produces uncut output for ever and
+  reports success throughout.</p>
 </div>
 
 <div class="finding gen">
@@ -385,9 +403,10 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
     <p>Installers live in <span class="m">Drivers\</span>, gitignored at about 400 MB. Check
     the queue is type <span class="m">Local</span>, which a LocalSystem service needs.</p></li>
   <li><strong>Configure the media by hand in the vendor UI</strong>
-    <p>Unavoidable, and the reason spike 2 exists. Click through to Apply even if nothing
-    looks changed: the Epson's private geometry stayed stale at the previous form's size until
-    a second trip through its dialog.</p></li>
+    <p>Unavoidable, and the reason spike 2 exists. On the Epson, click through to Apply a
+    second time: its private geometry stayed stale at the previous form's size until a second
+    trip through the dialog. The ZD621 wrote its private geometry immediately, so this is
+    per-driver insurance rather than a universal step.</p></li>
   <li><strong>Read the objective fields</strong>
     <pre>benchmark.py "&lt;queue&gt;"</pre>
     <p>Gives resolution, private-region size, the imageable area, whether full bleed is
@@ -426,11 +445,15 @@ how much of the renderer finding was the ZC10L being an outlier rather than the 
 weak. One label each for two more: whether Brother magenta and yellow also print red, which
 decides how a two-colour badge may be authored, and whether deleting a stuck Brother job
 unblocks the queue, the one recovery route not yet ruled out.</p>
-<p>The ZD621 needs media configured and everything from step 3 down. It also speaks
-<strong>ZPL</strong>, a published and stable language, so a raw
+<p>The ZD621 still needs calipers on its label, and its fault behaviour induced. It is also
+the one device where the rig's output can be <em>resolution</em>-limited rather than
+driver-limited: at 203 dpi a dot is 0.125 mm, so the card's 0.1 pt hairline is under a third
+of a dot and 4 pt strokes are thinner than one dot. What those did is the column no printer
+here has filled in, and it bears directly on badge text.</p>
+<p>It also speaks <strong>ZPL</strong>, a published and stable language, so a raw
 <span class="m">WritePrinter</span> pass-through would bypass GDI, DEVMODE and the renderer
 entirely. That is a different architecture rather than a variant of this one, and worth an
-hour before any driver work.</p>
+hour before more driver work. The DYMO 550 Turbo is the fourth unit still boxed.</p>
 <p>One hazard on the bench: <span class="m">EPSON CW-C4000u</span> is enumerable by
 <span class="m">EnumPrinters</span> and absent from the Windows printer list, while
 <span class="m">(Copy 1)</span> is the working queue. Identical public fields, different private

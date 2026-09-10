@@ -812,6 +812,43 @@ started, and it answers with the old code.
     setting will help unless the hardware is fitted. Check that before
     concluding the setting is missing.
 
+47. **Cut replay proven on the ZD621 too, by a four-byte controlled pair.
+    This is the cleanest settings result in the spike.** Queue default left
+    at cut throughout, same PDF, same queue, same code path:
+
+    | pinned blob | label |
+    |---|---|
+    | the cut capture | **cut** |
+    | the tear-off capture | **did not cut** |
+
+    The two blobs differ by **4 bytes out of 13702**, public section
+    byte-identical: private+45 `0x00`->`0x01`, +803 `0x01`->`0x00`,
+    +1612 `0x00`->`0x04`, +1696 `0x00`->`0x02`.
+
+    **Why this beats the Epson's version of the same proof.** The Epson diff
+    moved 19 bytes and 15 were page geometry its driver had not flushed yet
+    (Verified 44), so someone could argue the geometry did the work. Here
+    nothing but four flag bytes changed and the behaviour still flipped both
+    ways. The vendor-private region is unambiguously what carries it.
+
+    **Three vendors now, each with a production-relevant setting in bytes no
+    portable API reaches, each carried by a captured blob, each overriding
+    the queue default:** ZC10L zoom (4 bytes), Epson auto-cut, ZD621 cut
+    mode (4 bytes). Spike 2's conclusion is no longer an extrapolation from
+    one driver.
+
+    **And it puts a number on the deployment risk.** Four bytes out of 13702
+    separate a badge that cuts from one that does not. Both jobs reported
+    `scale_pinned: true`, identical geometry to 0.002 mm, and byte-identical
+    JSON. Nothing in `/health`, `/queue` or the print response can tell them
+    apart. The only difference is in the operator's hand.
+
+    Also carry this: private-region freshness is driver-dependent. Same
+    capture sequence on both printers, and the ZD621 wrote its private
+    geometry immediately on the media change while the Epson deferred it. So
+    the "click through the dialog twice" precaution is Epson insurance, not
+    a universal step. Harmless to keep, wrong to generalise.
+
 ## Closed task 1 — the card print failed because of the renderer
 
 Resolved. Neither of the two hypotheses this file used to list was right. It
@@ -964,7 +1001,8 @@ Restore points live in `devmode\`, gitignored:
 | `C4000u.102x302-blackmark.devmode` | Epson, 102 x 302 mm, **cut OFF.** The teaching artefact, not for use |
 | `C4000u.102x302-autocut.devmode` | Epson, 102 x 302 mm, **cut ON.** Pin this one |
 | `ZD621.factory.devmode` | ZD621 as installed, 104 x 76.2 mm. Untouched factory state |
-| `ZD621.88x76-mark.devmode` | ZD621, 88 x 76 mm mark-sensed. Prints correctly, does not cut |
+| `ZD621.88x76-mark.devmode` | ZD621, 88 x 76 mm mark-sensed, **tear-off.** Teaching artefact |
+| `ZD621.88x76-mark-cut.devmode` | ZD621, 88 x 76 mm mark-sensed, **cut ON.** Pin this one |
 
 These are restore points on this box, not source, and they are gitignored.
 A fresh machine needs its own captures: the vendor bytes are opaque and
