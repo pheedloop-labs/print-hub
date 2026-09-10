@@ -115,11 +115,10 @@ Author against the **imageable** size on any driver, never the form size.
 The ZC10L and the Epson report zero offset with physical equal to imageable,
 so the distinction never came up before the Brother.
 
-Still open: whether red actually prints. The driver reports `colordevice 0`
-and `dmColor 1`, monochrome, even with black/red stock selected, and
-`dmMediaType` stayed 0, so the paper-type choice must live in the 320
-private bytes. `test-card-83.98x58.92.pdf` carries a pure red bar and a line
-of pure red text to settle it by eye.
+**Red prints, and the driver denies it can.** See Verified 37. Author red
+as exactly 255,0,0. The paper-type choice is not in `dmMediaType`, which
+stayed 0, so it lives in the 320 private bytes and is therefore carried by a
+captured blob rather than by any portable field.
 
 ## Files
 
@@ -489,6 +488,29 @@ started, and it answers with the old code.
     blob pinned, reporting 300 dpi, 992 x 696 px, `clipped=False` and a
     scale error of 0.009 x 0.008 mm. So neither the PDFium path nor the
     per-job DEVMODE pin is specific to the ZC10L. Awaiting calipers.
+
+37. **The Brother prints red while reporting that it cannot.** With
+    black/red DK stock loaded and selected, a pure 255,0,0 bar and a line of
+    pure red text both came out red on paper. The driver reports
+    `DC_COLORDEVICE` 0 and `dmColor` 1, monochrome, throughout.
+
+    So **never gate behaviour on a driver's colour claim.** Product code
+    asking "is this a colour device?" would decide the QL-800 is monochrome,
+    and any greyscale conversion done on the strength of that answer would
+    silently destroy the second colour.
+
+    Put this beside Verified 18 and read them together, because they are the
+    same defect pointing opposite ways. The ZC10L **overstates** its
+    resolution, reporting 315 dpi while printing at 300, and a card came out
+    5% oversized. The Brother **understates** its colour, reporting a
+    monochrome device while printing red. A driver's self-description is
+    evidence, not truth. Only printed output settles anything, which is why
+    every claim in this file that matters is backed by a physical card or
+    label.
+
+    Consequence for the still-open `monochrome` work from task 1: forcing
+    `dmColor` is not obviously meaningful on a driver that ignores the field
+    in one direction already. Test it on media before believing it.
 
 ## Closed task 1 — the card print failed because of the renderer
 
@@ -874,6 +896,10 @@ even though it is reactive.
   port writes `out.pdf` later still. Check for a job or a file in a wait
   loop, never immediately. Two apparent failures in this work were this race
   and nothing else.
+- **A driver's own capability reports can be wrong in either direction.**
+  `LOGPIXELSX` overstated resolution on the ZC10L (Verified 18) and
+  `DC_COLORDEVICE` understated colour on the Brother (Verified 37). Treat
+  every driver claim as a hypothesis to be checked against media.
 - **Two ways to read a queue's default DEVMODE disagree.** `GetPrinter`
   level 2 `pDevMode` is the *stored* default and can hold geometry the
   driver no longer uses; `DocumentProperties` with `DM_OUT_BUFFER` is the
