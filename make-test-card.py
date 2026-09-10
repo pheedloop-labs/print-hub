@@ -89,6 +89,15 @@ for n_line, n_text in ((5, 4), (4, 4), (4, 3), (3, 3), (3, 2), (2, 2)):
     Y, used = stack(n_line, n_text)
     if used <= H:
         break
+
+# Centre the band block when the page is much taller than the content needs.
+# A 302 mm badge would otherwise carry everything in its bottom 57 mm with a
+# quarter of a metre of white space above it. The vertical target is placed
+# from H directly, so it is unaffected.
+if used < H:
+    shift = (H - used) / 2.0
+    Y = {k: [e + shift for e in v] if isinstance(v, list) else v + shift
+         for k, v in Y.items()}
 if n_line < len(LINE_WIDTHS) or n_text < len(TEXT_SIZES):
     print(f"page is {H:g} mm, needs {used:.1f}: ladders trimmed to "
           f"{n_line} line widths and {n_text} text sizes")

@@ -58,7 +58,8 @@ win32print` fails, run it again from an admin shell.
 | `HUB-CARD` | USB001 | the Zebra ZC10L. Driver `Zebra ZC10L USB Card Printer` |
 | `HUB-PDF` | `C:\hub\out.pdf` | silent PDF target. Costs no media |
 | `Brother QL-800` | USB003 | DK label roll, 62 mm continuous. Cheap paper tests |
-| `EPSON CW-C4000u` | USB002 | colour inkjet label roll, 108 mm. Badge-capable |
+| `EPSON CW-C4000u (Copy 1)` | USB002 | the working Epson. 102 x 302 mm badge stock, black mark |
+| `EPSON CW-C4000u` | USB002 | **orphan.** Enumerable but invisible in Windows. Do not use |
 | `Microsoft Print to PDF` | `PORTPROMPT:` | never use. It opens a save dialog |
 
 `HUB-PDF` is a second queue on the Microsoft PDF driver, bound to a file
@@ -654,6 +655,53 @@ started, and it answers with the old code.
     self-explaining: the fault would still be unattributable and still
     invisible until a badge is sent.
 
+42. **Third driver, and the pin travels again. The EPSON CW-C4000u prints
+    correctly at 102 x 302 mm.** Pinned blob, 600 dpi, raster 2409 x 7134 px
+    matching the printable area exactly on both axes, `clipped=False`, scale
+    error 0.011 x 0.016 mm. The operator reports scale correct on both
+    targets and colours good.
+
+    Read the scale result as operator-confirmed rather than measured: no
+    numeric caliper readings were given, so do not quote it as 0.00 mm the
+    way the ZC10L cards can be. It is still the most sensitive scale check
+    in this spike, because the vertical target is **250 mm** against the
+    ZC10L's 100 mm, so a proportional error would show up two and a half
+    times larger.
+
+    Worth carrying separately:
+
+    - **Offset 0, 0 and physical equal to imageable**, so full-bleed badges
+      are possible here. The Brother cannot do that (Verified 33).
+    - **First honest colour look in this project.** `colordevice 1`, a
+      600 dpi CMYK inkjet, and unlike the Brother it is not lying about it.
+      Every earlier colour observation came off either a JPEG-re-encoded PDF
+      or a two-colour thermal printer.
+    - **17.2 megapixels rendered and spooled in 1.35 s.** Useful for the
+      child-process change on the later-tasks list: render cost is not what
+      would make that change hurt.
+    - The queue that works is `EPSON CW-C4000u (Copy 1)`. The bare
+      `EPSON CW-C4000u` is an orphan: present to `EnumPrinters`, absent from
+      the Windows printer list, and configured differently in the private
+      region while identical in every public field. See the gotchas.
+
+43. **Open: the badge did not auto-cut, and the cut setting is not a DEVMODE
+    field.** There is no standard `DEVMODE` member for cutter behaviour, so
+    on this driver it must live in the 30320 private bytes. That makes it
+    the Epson's exact analogue of the ZC10L's `Zoom-in/out[Z]`, and a better
+    one, because auto-cut is a production requirement rather than an
+    artificial test setting: an uncut badge is not a usable badge.
+
+    **The consequence is the important part. A hub deployed with a blob
+    captured before auto-cut was enabled prints uncut badges forever, and
+    nothing reports a problem.** Same silent-failure class as Verified 18's
+    5% oversizing. This is why the rule is capture the blob *after*
+    configuring the driver by hand, and it is now the second independent
+    reason for that rule rather than a Zebra curiosity.
+
+    To settle it: enable auto-cut in the driver UI, capture a second blob,
+    `devmode.py diff` the two to locate the bytes, then replay both ways as
+    Verified 17 did with zoom.
+
 ## Closed task 1 — the card print failed because of the renderer
 
 Resolved. Neither of the two hypotheses this file used to list was right. It
@@ -1142,6 +1190,13 @@ Logged rather than done. Do not start these without the device.
   port writes `out.pdf` later still. Check for a job or a file in a wait
   loop, never immediately. Two apparent failures in this work were this race
   and nothing else.
+- **A queue can exist for the print API and not for the Windows UI.**
+  `EPSON CW-C4000u` is enumerated by `EnumPrinters` and absent from the
+  Windows printer list, while `EPSON CW-C4000u (Copy 1)` is the real one.
+  Their public `DEVMODE` fields are identical and their private regions
+  differ, so nothing visible tells them apart. `/printers` would happily
+  offer the agent a queue nobody can see or fix. Never assume an enumerated
+  queue is a usable one.
 - **A driver's own capability reports can be wrong in either direction.**
   `LOGPIXELSX` overstated resolution on the ZC10L (Verified 18) and
   `DC_COLORDEVICE` understated colour on the Brother (Verified 37). Treat
