@@ -1045,16 +1045,55 @@ wording and still tells the person the thing they need to know.
 
 ## Later tasks, in order
 
+Numbering here used to skip 2. It was a typo, not a deleted task.
+
 1. Move rendering into a child process. PDFium runs in-process today, so a
    malformed PDF that crashes it takes the whole agent down. The renderer
    choice itself is settled, so this is the last piece of it outstanding.
    The bake-off is closed: the alternative could not print a card at all,
    and the GPLv3 dependency is retired.
-3. Make the dedupe log durable on disk with a 24 hour window. It is in memory
+2. Make the dedupe log durable on disk with a 24 hour window. It is in memory
    today.
-4. **Done.** The Brother QL-800 and EPSON CW-C4000u are both installed, so
+3. **Done.** The Brother QL-800 and EPSON CW-C4000u are both installed, so
    text and colour checks no longer cost PVC. A Zebra ZD621 and a DYMO 550
    Turbo are also on the desk, not yet installed.
+
+### Blocked on hardware we do not have on the desk yet
+
+Logged rather than done. Do not start these without the device.
+
+4. **Poll the hub from the app a few seconds after sending, and surface the
+   fault.** Needs an iPad, and there is no iPad in this testing yet. The app
+   keeps saying "we've sent your badge to the printer", then follows with
+   whatever the printer reported. The ZC10L reports a fault about one second
+   after the job arrives, so a poll at three to five seconds catches it.
+   `/queue` already returns the printer `Status` integer, so the rig owes
+   nothing to this: `16` is out of cards, `8` jammed, `262144` no ribbon,
+   `4194304` cover open.
+
+   The gap it closes: the fault lands on the hub's display and the person
+   who sent the badge is at an iPad, possibly across the room from it.
+5. **Check whether an iPad can reach a QL-800 at all.** This gates the whole
+   Brother SDK idea and costs nothing but a spec sheet. The unit here is on
+   USB003, and Brother's networked models carry different part numbers. If
+   it is USB-only there is no direct app connection without changing
+   hardware, and the SDK path belongs to a QL-820NWB or similar instead.
+6. **Confirm the Brother SDK reports faults with attribution.** The thing
+   being escaped is the Windows driver's generic `ERROR`, which cannot tell
+   out-of-labels from cover-open. An SDK that reports its own generic error
+   buys nothing. Check before committing to the direct path.
+
+### Open experiments that need no new hardware
+
+7. **Delete the stuck job, then resubmit, on a genuinely stuck queue.** The
+   one recovery route not yet ruled out on the QL-800, per Verified 41. The
+   previous attempt was confounded. Costs one label.
+8. Test whether SumatraPDF can open the Brother and Epson queues. Free
+   against paused queues, and it settles how much of Closed task 1 is the
+   ZC10L driver being an outlier rather than the renderer being weak.
+9. Establish the Brother's two-colour separation rule: do `M` and `Y` print
+   red, or only exact 255,0,0? Verified 37 has `R` red and `B` black. One
+   label, and it decides how a badge may be authored.
 
 ## Explicitly out of scope this week
 
