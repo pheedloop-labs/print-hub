@@ -582,15 +582,24 @@ started, and it answers with the old code.
     carries the error bit the printer status will not name. **Read both,
     trust neither alone.**
 
-41. **Unresolved: does programmatic resume recover the job or destroy it?**
-    Recorded because the question is important, not because it is answered.
-    The first attempt was confounded and must be re-run.
+41. **No programmatic recovery works on the QL-800. Only the dialog does.**
+    Every job-control route was tried against a genuinely stuck job:
 
     | action | outcome |
     |---|---|
-    | operator clicks Resume in the driver dialog | label printed |
-    | `SetJob` `JOB_CONTROL_RESUME` on the paused job | job left the queue in 0.5 s, `Status` back to `0x0`, WMI `Idle`, no error raised, **no label** |
-    | fresh job, no fault present | label printed normally |
+    | operator clicks Resume in the dialog | label prints. The only thing that works |
+    | `JOB_CONTROL_RESUME` | job leaves the queue in 0.5 s, `Status` back to `0x0`, WMI `Idle`, no error raised, **no label**. Tried twice |
+    | `JOB_CONTROL_RESTART` | job stays `PAUSED\|ERROR` for 20 s. The spooler sets the `RESTART` bit, the driver ignores it. Job survives |
+    | fresh job while the stuck one is queued | **queues behind it and does not print.** Printer stays `ERROR` |
+    | fresh job, no fault present | prints normally |
+
+    `RESTART` fails better than `RESUME`: it leaves the badge in the queue
+    instead of discarding it. Neither recovers.
+
+    **A stuck job blocks everything behind it.** This is the operational
+    fact that matters most. One unrecovered fault stops every subsequent
+    badge, and the queue does not drain itself. So recovery by resubmission
+    cannot work on its own; the blocker has to be cleared first.
 
     **The confound: the fault used was media-out, and the operator reports
     the roll may not have been properly seated when it went back in.** So
@@ -625,20 +634,25 @@ started, and it answers with the old code.
     Those are opposite conclusions, so do not carry either into the memo
     until the clean run is done.
 
-    Two candidates follow from that mechanism, in order of preference:
+    Still genuinely open, and worth one clean test some other day:
+    **delete the stuck job, then resubmit.** The attempt here was
+    confounded, because the operator clicked Resume before the delete, so
+    the queue was already healthy and the job that printed proves nothing
+    about unblocking a stuck one. The agent holds the badge PDF, a fresh job
+    demonstrably re-feeds, and resubmission uses no vendor job-control
+    semantics, so it is the one candidate that could generalise. Do not
+    assume it works.
 
-    - `JOB_CONTROL_RESTART`, documented to reprint from the beginning, which
-      may re-drive the driver rather than merely release the job.
-    - **Delete the stuck job and submit a fresh one.** This is what the
-      product should do regardless of the answer above. The agent holds the
-      badge PDF, a fresh job demonstrably re-feeds, and resubmission needs
-      no driver cooperation at all. It also generalises: it cannot depend on
-      a vendor's job-control semantics because it does not use them.
+    Note the framing this settles anyway. "Detect `PAUSED|ERROR` and
+    resume" is a badge shredder that reports success, and it is the first
+    thing any engineer would reach for. Write that down before somebody
+    ships it as an obvious win.
 
-    Note what this does to the earlier framing. "Detect `PAUSED|ERROR` and
-    resume" is the mitigation that silently destroys badges. "Detect
-    `PAUSED|ERROR`, delete, and resend" is a different mitigation that may
-    well work. The distinction is one word and the whole outcome.
+    **The verdict does not depend on the open question.** Recovery needs a
+    human at a desktop with a mouse, so the QL-800 cannot run unattended as
+    it stands. Delete-and-resend would at worst make it recoverable, not
+    self-explaining: the fault would still be unattributable and still
+    invisible until a badge is sent.
 
 ## Closed task 1 — the card print failed because of the renderer
 

@@ -100,3 +100,76 @@
     wmi     : status=Idle error=Unknown ext=0 offline=False
     queued  : 0
 
+[ 1028.23s] 08:43:19.585
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 1
+    job 13 status=PRINTING|RETAINED pStatus='' pages=1/0
+
+[ 1029.44s] 08:43:20.802
+    printer : 0x00000002  ERROR
+    wmi     : status=Other error=Other ext=1 offline=False
+    queued  : 1
+    job 13 status=PAUSED|ERROR|PRINTING|RETAINED pStatus='' pages=1/0
+
+[ 1060.24s] 08:43:51.603
+    printer : 0x00000000  (none)
+    wmi     : status=Idle error=Unknown ext=0 offline=False
+    queued  : 0
+
+[ 1414.45s] 08:49:45.813
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 1
+    job 14 status=PRINTING|RETAINED pStatus='' pages=1/0
+
+[ 1415.70s] 08:49:47.059
+    printer : 0x00000002  ERROR
+    wmi     : status=Other error=Other ext=1 offline=False
+    queued  : 1
+    job 14 status=PAUSED|ERROR|PRINTING|RETAINED pStatus='' pages=1/0
+
+[ 1449.01s] 08:50:20.366
+    printer : 0x00000002  ERROR
+    wmi     : status=Other error=Other ext=1 offline=False
+    queued  : 1
+    job 14 status=PAUSED|ERROR|PRINTING|RESTART|RETAINED pStatus='' pages=1/0
+
+[ 1488.56s] 08:50:59.921
+    printer : 0x00000002  ERROR
+    wmi     : status=Other error=Other ext=1 offline=False
+    queued  : 2
+    job 14 status=PAUSED|ERROR|PRINTING|RESTART|RETAINED pStatus='' pages=1/0
+    job 15 status=(none) pStatus='' pages=0/1
+
+[ 1518.90s] 08:51:30.255
+    printer : 0x00000002  ERROR
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 2
+    job 14 status=ERROR|PRINTING|RESTART|RETAINED pStatus='' pages=1/0
+    job 15 status=(none) pStatus='' pages=0/1
+
+[ 1520.22s] 08:51:31.582
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 2
+    job 14 status=PRINTING|RESTART|RETAINED pStatus='' pages=1/0
+    job 15 status=(none) pStatus='' pages=0/1
+
+[ 1524.50s] 08:51:35.861
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 1
+    job 15 status=PRINTING|RETAINED pStatus='' pages=0/1
+
+[ 1525.69s] 08:51:37.045
+    printer : 0x00000000  (none)
+    wmi     : status=Printing error=NoError ext=0 offline=False
+    queued  : 1
+    job 15 status=PRINTING|RETAINED pStatus='' pages=1/0
+
+[ 1530.96s] 08:51:42.318
+    printer : 0x00000000  (none)
+    wmi     : status=Idle error=Unknown ext=0 offline=False
+    queued  : 0
+
