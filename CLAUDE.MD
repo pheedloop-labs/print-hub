@@ -889,6 +889,59 @@ started, and it answers with the old code.
     badge designer, and it is worth telling them before they ship 4 pt
     disclaimer text.
 
+49. **The DYMO 550 refuses non-genuine labels outright.** First print with
+    third-party stock: printer `Status 0x00000002 ERROR`, job
+    `ERROR|PRINTING|RETAINED`, and `pStatus` reading **`Unknown label
+    detected`**. Job still stuck after 24 s, nothing printed.
+
+    RFID media authentication is enforced, not advisory. This is a
+    **consumables constraint, not a software one**: no driver setting, blob
+    or code change reaches it, and the DYMO column of the benchmark cannot
+    be completed without genuine DYMO stock. Worth knowing before anyone
+    prices a DYMO into a venue kit, because the labels are the recurring
+    cost and third-party is not an option.
+
+50. **`pStatus` is not always empty, and on the DYMO it is the best fault
+    report on the bench.** The spike 4 trap in Closed task 4 says
+    "`pStatus` is always empty". That was true of the ZC10L and the Brother
+    and it is **wrong in general**. The DYMO populates it with a
+    human-readable sentence naming the actual fault.
+
+    **All three printers put the truth in a different field.** This is the
+    sharpest form of the rule and it should drive the implementation:
+
+    | printer | printer `Status` | job `Status` | job `pStatus` |
+    |---|---|---|---|
+    | Zebra ZC10L | **named**, 4 codes | lies, reads `PRINTING` | empty |
+    | Brother QL-800 | generic `ERROR` | **flags** `PAUSED\|ERROR` | empty |
+    | DYMO 550 | generic `ERROR` | `ERROR`, not paused | **a sentence** |
+
+    So the agent must read all three: the printer status bitfield, the job
+    status bitfield, and the `pStatus` string. Any one of them alone is
+    uninformative on at least one printer, and no two of them agree about
+    where the information lives. Reading `pStatus` is nearly free and on the
+    DYMO it is the difference between "it failed" and "wrong labels".
+
+    Note the DYMO job is `ERROR` but **not** `PAUSED`, unlike the Brother's
+    `PAUSED|ERROR`. So even the shape of a stuck job differs, and a
+    detector keyed on `JOB_STATUS_PAUSED` would miss this one entirely.
+
+51. **The DYMO has the worst unprintable margins of the five.** Physical
+    694 x 1200 px against an imageable 665 x 1112 at 300 dpi, at an
+    asymmetric offset of 17, 70: **1.44 mm at the left and 5.93 mm at the
+    top**, losing 2.46 mm of width and 7.45 mm of length overall. The
+    Brother loses 2.96 / 1.52 mm; the other three lose nothing.
+
+    It is also the loosest driver for geometry honesty here, claiming
+    56 x 94 mm while its own pixel counts imply 56.30 x 94.15, deltas of
+    0.30 and 0.15 mm. Inside the 1 mm consistency threshold, but several
+    times the other printers' disagreement.
+
+    One more stale-field case for the collection: after the media change
+    `dmFormName` still read `30252 Address` while `dmPaperSize` had moved to
+    paperkind 179. Same class as Verified 35 and 44. Do not trust a form
+    name.
+
 ## Closed task 1 — the card print failed because of the renderer
 
 Resolved. Neither of the two hypotheses this file used to list was right. It
@@ -1206,6 +1259,12 @@ even though it is reactive.
 - **One condition at a time.** `PAPER_OUT` was *replaced* by `DOOR_OPEN`,
   not OR-ed with it. Fixing the reported fault can simply reveal the next
   one, so the agent cannot describe a compound failure.
+- **`pStatus` is empty on the ZC10L and the Brother, and carries a
+  human-readable sentence on the DYMO 550.** The claim below that it is
+  "always empty" was measured on two printers and is wrong in general. See
+  Verified 50: read the printer status bitfield, the job status bitfield and
+  the `pStatus` string, because the three printers tested put the truth in
+  three different places.
 - **The event log is empty.** `PrintService/Admin` is enabled by default and
   recorded **zero** events across every fault here.
   `PrintService/Operational` is **disabled** by default and enabling it needs
