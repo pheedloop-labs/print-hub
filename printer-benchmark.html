@@ -237,6 +237,23 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
       <td><span class="p ok">operator confirmed</span></td>
       <td><span class="p ok">confirmed, 250 mm target</span></td>
       <td><span class="p wa">printed, calipers pending</span></td></tr>
+    <tr class="group"><td colspan="5">Resolution floor &mdash; one dot, and what survives it</td></tr>
+    <tr><td class="field">One dot, in points</td><td>0.24 pt</td><td>0.24 pt</td><td>0.12 pt</td><td><strong>0.355 pt</strong></td></tr>
+    <tr><td class="field">0.1 pt hairline</td>
+      <td><span class="p un">UNTESTED</span></td>
+      <td><span class="p un">UNTESTED</span></td>
+      <td><span class="p un">UNTESTED</span></td>
+      <td><span class="p no">broke into dots</span></td></tr>
+    <tr><td class="field">4 pt text</td>
+      <td><span class="p un">UNTESTED</span></td>
+      <td><span class="p un">UNTESTED</span></td>
+      <td><span class="p un">UNTESTED</span></td>
+      <td><span class="p wa">barely legible</span></td></tr>
+    <tr><td class="field">Working floor for badge art</td>
+      <td><span class="p un">UNTESTED</span></td>
+      <td><span class="p un">UNTESTED</span></td>
+      <td><span class="p un">UNTESTED</span></td>
+      <td>0.5 pt lines, 5 pt text</td></tr>
   </tbody>
 </table>
 </div>
@@ -368,6 +385,25 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
   anything.</p>
 </div>
 
+<div class="finding gen">
+  <p class="tag">Constrains badge design, not the agent</p>
+  <h3>At 203 dpi a hairline breaks into dots and 4 pt text is barely legible</h3>
+  <p>One dot at 203 dpi is 0.125 mm, or <strong>0.355 pt</strong>. A 0.1 pt line is 0.28 of a
+  dot, so PDFium hands the driver roughly 28% grey and a thermal head, being strictly 1-bit,
+  thresholds it into a scatter of dots. Working floors for a 203 dpi device are 0.5 pt lines
+  and 5 pt text; one dot is the theoretical floor and looks ragged.</p>
+  <p>This is the first limit in the spike that belongs to the <em>printer</em> rather than to a
+  driver or the renderer, so no code change addresses it. The consequence lands on badge
+  design: a template that reads correctly on the 600 dpi Epson degrades on a 203 dpi ZD621, so
+  templates need a declared minimum-resolution assumption or per-device variants. Worth
+  telling whoever builds the badge designer before they ship 4 pt disclaimer text.</p>
+  <p>Likely mechanism, offered as a hypothesis rather than a result: the ZC10L is a retransfer
+  card printer rendering continuous tone, so a 28% grey line comes out thin and grey instead of
+  breaking up. If that holds, the real split is <strong>1-bit devices against contone
+  devices</strong>, not high dpi against low. The ZC10L card's hairline rung was never examined
+  closely enough to say.</p>
+</div>
+
 <div class="finding local">
   <p class="tag">Zebra-specific &middot; did not generalise</p>
   <h3>The ten-second queue-default revert</h3>
@@ -445,11 +481,10 @@ how much of the renderer finding was the ZC10L being an outlier rather than the 
 weak. One label each for two more: whether Brother magenta and yellow also print red, which
 decides how a two-colour badge may be authored, and whether deleting a stuck Brother job
 unblocks the queue, the one recovery route not yet ruled out.</p>
-<p>The ZD621 still needs calipers on its label, and its fault behaviour induced. It is also
-the one device where the rig's output can be <em>resolution</em>-limited rather than
-driver-limited: at 203 dpi a dot is 0.125 mm, so the card's 0.1 pt hairline is under a third
-of a dot and 4 pt strokes are thinner than one dot. What those did is the column no printer
-here has filled in, and it bears directly on badge text.</p>
+<p>The ZD621 still needs calipers on its label and its fault behaviour induced. The resolution
+floor is worth measuring on the other three too, now that the ZD621 has shown there is one: it
+takes no new media, only a closer look at cards already printed, and it would settle whether
+the split is 1-bit against contone rather than dpi.</p>
 <p>It also speaks <strong>ZPL</strong>, a published and stable language, so a raw
 <span class="m">WritePrinter</span> pass-through would bypass GDI, DEVMODE and the renderer
 entirely. That is a different architecture rather than a variant of this one, and worth an

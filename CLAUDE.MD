@@ -849,6 +849,46 @@ started, and it answers with the old code.
     the "click through the dialog twice" precaution is Epson insurance, not
     a universal step. Harmless to keep, wrong to generalise.
 
+48. **At 203 dpi a 0.1 pt hairline prints as scattered dots and 4 pt text
+    is barely legible. This is a resolution limit, and no code can fix
+    it.** Observed on the ZD621 label. Every other printer here is 300 or
+    600 dpi, so this is the first time the rig's output was limited by the
+    printer rather than by a driver or the renderer.
+
+    The arithmetic, because it predicts the effect elsewhere. One dot at
+    203 dpi is 0.125 mm, which is **0.355 pt**. So:
+
+    | authored | in dots | observed |
+    |---|---|---|
+    | 0.1 pt = 0.035 mm | 0.28 dot | broken into dots |
+    | 0.25 pt = 0.088 mm | 0.71 dot | not separately reported |
+    | 0.5 pt = 0.176 mm | 1.41 dot | solid |
+
+    PDFium rasterises antialiased, so a 0.28-dot line arrives as roughly 28%
+    grey. A thermal head is **1-bit**: it either burns a dot or does not, so
+    that grey is thresholded and what survives is a scatter of dots rather
+    than a thin line.
+
+    **Working floors for a 203 dpi device: lines no finer than 0.5 pt, text
+    no smaller than 5 pt.** One dot, 0.355 pt, is the theoretical floor and
+    it will look ragged.
+
+    Likely mechanism for why this never appeared before, stated as a
+    hypothesis rather than a finding: the ZC10L is a retransfer card printer
+    and renders continuous tone, so a 28% grey line comes out as a thin grey
+    line rather than breaking up. Thermal label printers cannot do that.
+    **If that is right, the split is 1-bit devices against contone devices,
+    not simply high dpi against low.** Untested; the ZC10L card's 0.1 pt rung
+    was never examined closely.
+
+    **The product consequence is a constraint on badge design, not on the
+    agent.** Minimum legible type and line weight depend on the printer, and
+    a template that looks right on the 600 dpi Epson degrades on a 203 dpi
+    ZD621. So badge templates need either a declared minimum-resolution
+    assumption or per-device variants. That belongs to whoever builds the
+    badge designer, and it is worth telling them before they ship 4 pt
+    disclaimer text.
+
 ## Closed task 1 — the card print failed because of the renderer
 
 Resolved. Neither of the two hypotheses this file used to list was right. It
