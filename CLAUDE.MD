@@ -710,8 +710,44 @@ started, and it answers with the old code.
     | **268** | 256 -> 65 | unexplained |
     | **600** | 1 -> 2 | unexplained. The cut-mode candidate |
 
-    `+600` moving 1 to 2 is the plausible cut enum. Do not assert it without
-    a behavioural test; the diff cannot distinguish it from `+268`.
+    `+600` moving 1 to 2 is the plausible cut enum. The behavioural test
+    below proves the cut setting is in one of those two offsets but cannot
+    say which, and it does not need to.
+
+    **Settled by a controlled pair, and it is the cleanest experiment in
+    this spike.** Same PDF, same queue, same code path, with the queue
+    default left at auto-cut ON throughout, so the only variable was the
+    pinned blob:
+
+    | pinned blob | badge |
+    |---|---|
+    | the pre-cut capture | **did not cut** |
+    | the auto-cut capture | **cut** |
+
+    The first row alone would have been ambiguous, since "pinning any blob
+    suppresses cutting" explains it equally well. The second row excludes
+    that, so the blob is carrying the setting rather than dropping it.
+
+    Three things follow, and two of them generalise earlier single-driver
+    claims:
+
+    1. **Per-job DEVMODE beats the queue default on a second vendor.** The
+       queue default said cut and the pinned blob said do not, and the blob
+       won. Verified 20 was measured only on the ZC10L, and assuming Zebra
+       behaviour generalises has been wrong twice today, so this is worth
+       having.
+    2. **Capture and replay carries a vendor-private setting that matters.**
+       Spike 2's proof used `Zoom-in/out[Z]`, a setting invented for the
+       test. Auto-cut is a production requirement.
+    3. **The deployment hazard is now demonstrated rather than argued.** A
+       hub pinned with a blob captured before auto-cut was configured prints
+       uncut badges forever, while `/health` reports `scale_pinned: true`,
+       the geometry reads correct to 0.016 mm, and nothing raises an error.
+
+    **Prefer this pair over the zoom pair when showing the team.** Both
+    demonstrate the same silent failure, but a 5% oversized card needs
+    calipers to see, and an uncut badge is obviously wrong to anybody
+    holding it. Keep the two Epson badges together.
 
 44. **The private region carried stale geometry, and nothing visible said
     so.** The first Epson blob recorded page width 2551 px and height
@@ -889,6 +925,9 @@ Restore points live in `devmode\`, gitignored:
 | `HUB-CARD.restore.devmode` | zoom 100, the known-good config. Pin this one |
 | `HUB-CARD.zoom105.devmode` | zoom 105, kept as the second config for replay tests |
 | `HUB-PDF.restore.devmode` | the `HUB-PDF` default |
+| `QL800.62mm-blackred.devmode` | Brother, 62 mm tape, black/red stock |
+| `C4000u.102x302-blackmark.devmode` | Epson, 102 x 302 mm, **cut OFF.** The teaching artefact, not for use |
+| `C4000u.102x302-autocut.devmode` | Epson, 102 x 302 mm, **cut ON.** Pin this one |
 
 These are restore points on this box, not source, and they are gitignored.
 A fresh machine needs its own captures: the vendor bytes are opaque and
