@@ -292,9 +292,15 @@ def api_state():
     if not entries and QUEUE:
         entries = [{"name": QUEUE, "queue": QUEUE}]
 
+    # One WMI query for the whole fleet. None means WMI could not be asked,
+    # which is not the same as nothing being offline, so it is passed through
+    # rather than flattened to False.
+    offline = faults.offline_queues()
+
     printers = []
     for entry in entries:
-        reading = faults.read(entry["queue"])
+        is_offline = None if offline is None else entry["queue"] in offline
+        reading = faults.read(entry["queue"], offline=is_offline)
         reading["name"] = entry.get("name") or entry["queue"]
         reading["note"] = entry.get("note")
         printers.append(reading)

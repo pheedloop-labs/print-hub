@@ -15,6 +15,7 @@
 <article
   class="card"
   class:alert={printer.state === 'fault' || printer.state === 'unreachable'}
+  class:warn={printer.state === 'offline' || printer.state === 'stalled'}
 >
   <header>
     <div class="id">
@@ -67,6 +68,10 @@
 
   .alert {
     border-color: rgb(var(--state-fault-fg) / 0.45);
+  }
+
+  .warn {
+    border-color: rgb(var(--state-warn-fg) / 0.45);
   }
 
   header {

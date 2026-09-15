@@ -14,6 +14,9 @@
     idle: 'No fault reported',
     printing: 'Printing',
     fault: 'Fault',
+    // Amber rather than red: the printer has not reported anything wrong,
+    // it is not there to report. Different diagnosis, different fix.
+    offline: 'Offline',
     stalled: 'Stalled',
     unreachable: 'Unreachable',
     unknown: 'Unknown',
@@ -84,12 +87,14 @@
     background: rgb(var(--state-fault-fg));
   }
 
-  .stalled {
+  .stalled,
+  .offline {
     background: rgb(var(--state-warn-bg));
     color: rgb(var(--state-warn-fg));
     border-color: rgb(var(--state-warn-fg) / 0.3);
   }
-  .stalled .dot {
+  .stalled .dot,
+  .offline .dot {
     background: rgb(var(--state-warn-fg));
   }
 

@@ -3,8 +3,9 @@
 
   let { hub } = $props()
 
-  let faulted = $derived(
-    hub.printers.filter((p) => p.state === 'fault' || p.state === 'unreachable')
+  const NEEDS_ATTENTION = ['fault', 'unreachable', 'offline', 'stalled']
+  let flagged = $derived(
+    hub.printers.filter((p) => NEEDS_ATTENTION.includes(p.state))
   )
 </script>
 
@@ -12,8 +13,8 @@
   <div class="head">
     <h2>Printers</h2>
     <p class="count">
-      {hub.printers.length} configured{#if faulted.length}, <strong
-          >{faulted.length} reporting a fault</strong
+      {hub.printers.length} configured{#if flagged.length}, <strong
+          >{flagged.length} need attention</strong
         >{/if}
     </p>
   </div>
