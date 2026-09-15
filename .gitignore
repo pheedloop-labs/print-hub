@@ -47,3 +47,8 @@ Drivers/
 # hub.ps1 status flags the build going stale against console/src.
 console/node_modules/
 console/.vite/
+
+# Per-printer configuration for THIS box: which captured blob to pin and which
+# card to send. Machine-local like the blobs it points at, so a fresh machine
+# starts with none and configures its own. See printhub/fleet.py.
+printers.local.json

@@ -128,12 +128,13 @@ C:/hub/
   hub.ps1             task runner. start/stop/status/demo/capture/...
   hub.py              entry point. The service runs waitress-serve hub:app
   requirements.txt    direct dependencies, pinned
-  printers.json       the fleet: queue + card + caliper targets + blob
+  printers.local.json per-box printer config. Gitignored, see fleet.py
   printhub/           the rig
     app.py            Flask. Serves the console at / and the API
     render.py         PDFium raster, GDI blit, exact scale by construction
     devmode.py        capture and replay a DEVMODE, vendor bytes included
-    faults.py         one honest reading per queue, from all three sources
+    faults.py         enumerate the queues, and read one honest state each
+    fleet.py          per-printer config: which blob to pin, which card
     static/           the BUILT console. Committed, see below
   console/            the console's Svelte source. Node, dev machine only
   tools/              spike instruments, not runtime
@@ -165,9 +166,9 @@ below still calls the renderer `pdfium_print`, because those entries are dated
 evidence and were not rewritten. Read that name as `printhub.render`, and its
 command line as `python -m printhub.render`.
 
-`stress_all.py` is gone. It hardcoded a second copy of the fleet that
-`printers.json` already held, and `/demo?dry_run=1` does the same job
-reading the one source of truth. Verified 54 keeps its numbers.
+`stress_all.py` is gone. It hardcoded a second copy of the fleet the hub
+already had, and `/demo?dry_run=1` does the same job reading the one
+source of truth. Verified 54 keeps its numbers.
 
 `make_test_card.py` takes optional arguments, and earlier notes saying it
 takes none are out of date:
@@ -1138,6 +1139,58 @@ started, and it answers with the old code.
     single detectable member of the silent-failure family, so declining the
     job costs one honest error and saves a wrong badge.
 
+58. **Offline IS reported by the spooler, in `Attributes`, not `Status`.
+    Closed task 4 looked in the wrong field.** That task concluded
+    `PRINTER_STATUS_OFFLINE` "exists in the API and is never set" and that
+    WMI `WorkOffline` was the only signal available. The first half is
+    correct and the conclusion is wrong.
+
+    `PRINTER_ATTRIBUTE_WORK_OFFLINE`, bit `0x400` of the **`Attributes`**
+    field from `EnumPrinters` level 2, is the same underlying spooler flag
+    that WMI surfaces. Checked against WMI across all eight queues on this
+    box with two printers switched off at the wall:
+
+    | source | reads offline | cost |
+    |---|---|---|
+    | `Attributes & 0x400` | HUB-CARD, Brother QL-800 | **2 ms** |
+    | WMI `WorkOffline` | HUB-CARD, Brother QL-800 | 935 ms |
+    | `Status` bitfield | nothing, ever | - |
+    | `Get-Printer` | `Normal` for both | - |
+
+    Identical answers, **470x faster**, and it removes a COM dependency that
+    needs `CoInitialize` per thread under waitress and prints "Win32
+    exception occurred releasing IUnknown" into the service log if you
+    uninitialise it while results are still alive.
+
+    The caveats are unchanged, because it is the same flag: roughly 20
+    seconds to appear, and it never says why. Windows' own "Use Printer
+    Offline" setting sets it too, so the honest wording is "reported
+    offline", not "unplugged".
+
+    **The lesson is about the ledger, not the spooler.** "The API never
+    reports this" was measured on one field and generalised to the whole
+    API. `Status` and `Attributes` are different fields with different
+    meanings and the offline answer was sitting in the one nobody read. When
+    a finding says a thing is undetectable, it means undetectable *by what
+    was tried*.
+
+59. **The console's printer list is live, and `printers.json` is gone.** The
+    list comes from `EnumPrinters` on every poll, so it is what is actually
+    installed rather than what a config file claims. Eight queues on this
+    box against the five the old file listed.
+
+    What enumeration cannot supply stays in `printers.local.json`, keyed by
+    queue name and gitignored: which captured blob to pin, and which card to
+    send. Both are human decisions. There are two or three blobs per printer
+    and they are not interchangeable, and blob filenames deliberately say
+    what the capture *is* rather than matching a queue name.
+
+    Two flags fall out of enumeration for free and are worth having. A queue
+    on `PORTPROMPT:` is marked as opening a dialog. And **two queues sharing
+    a port are flagged as a pair**, which is the only cheap signal for the
+    orphan Epson: enumerable, identical in every public field, and not
+    usable.
+
 ## Closed task 1 — the card print failed because of the renderer
 
 Resolved. Neither of the two hypotheses this file used to list was right. It
@@ -1429,9 +1482,13 @@ even though it is reactive.
 
 - **Printer powered off or unplugged.** The spooler `Status` field never
   changes, not once, through disconnect, stuck job, reconnect and printing.
-  `PRINTER_STATUS_OFFLINE` exists in the API and is never set. The only
-  signal is WMI `WorkOffline` flipping true after about 20 seconds, and it
-  never says why. `Get-Printer` reports `Normal` throughout.
+  `PRINTER_STATUS_OFFLINE` exists in that field and is never set, and
+  `Get-Printer` reports `Normal` throughout. **Corrected by Verified 58: the
+  answer is in `Attributes`, not `Status`.** `PRINTER_ATTRIBUTE_WORK_OFFLINE`
+  (`0x400`) from `EnumPrinters` carries it, at 2 ms rather than WMI's 935 ms.
+  It still takes about 20 seconds to appear and still never says why, so this
+  remains a slow, causeless signal - but it is not the missing one this task
+  reported.
 - **Any fault at all while the queue is idle.** See above. An idle poll is
   worthless.
 - **A badge that printed wrongly.** No signal exists, at all.

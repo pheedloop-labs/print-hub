@@ -32,7 +32,7 @@ import uuid
 import win32print
 from flask import Flask, jsonify, request, send_from_directory
 
-from . import faults, render
+from . import faults, fleet, render
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 HUB_DIR = pathlib.Path(os.environ.get("HUB_DIR", ROOT))
@@ -40,14 +40,10 @@ SPOOL_DIR = HUB_DIR / "spool"
 QUEUE = os.environ.get("HUB_QUEUE", "")
 DEVMODE_PATH = os.environ.get("HUB_DEVMODE", "")
 
-# The fleet, for /demo only. Absent or malformed just disables the route.
-FLEET = []
-FLEET_ERROR = None
-try:
-    _cfg = json.loads((HUB_DIR / "printers.json").read_text(encoding="utf-8"))
-    FLEET = _cfg.get("printers", [])
-except (OSError, ValueError) as exc:
-    FLEET_ERROR = f"{type(exc).__name__}: {exc}"
+# Per-printer configuration is read per request, not once at start, because
+# the console will be editing it (ENG-3784) and a restart to pick up a
+# printer someone just configured would be a poor experience. It is a small
+# file. Environment variables keep the read-once rule; this is not one.
 
 # /demo renders in child processes, and under the service sys.executable is
 # waitress-serve.exe rather than python.
@@ -75,6 +71,12 @@ app = Flask(__name__, static_folder="static", static_url_path="")
 
 # job_id -> state. In memory; making it durable with a 24 h window is task 2.
 seen = {}
+
+
+def _config():
+    """Per-printer config, ignoring a read error. Callers that care use
+    fleet.load directly and surface the error."""
+    return fleet.load(HUB_DIR)[0]
 
 
 def jsonable(value):
@@ -128,8 +130,8 @@ def health():
         scale_pinned=DEVMODE is not None,
         hub_dir=str(HUB_DIR),
         jobs_seen=len(seen),
-        fleet=[f["name"] for f in FLEET] or None,
-        fleet_error=FLEET_ERROR,
+        configured=sorted(_config().keys()) or None,
+        config_error=fleet.load(HUB_DIR)[1],
     )
 
 
@@ -210,7 +212,7 @@ def do_print():
 
 @app.post("/demo")
 def demo():
-    """Print to every printer in printers.json at once.
+    """Print to every configured printer at once.
 
     Shows the product shape: one hub driving whatever is attached, invoked
     from elsewhere. /print stays single-queue per design rule 3.
@@ -222,10 +224,29 @@ def demo():
 
     dry_run rehearses the whole fan-out without spending media.
     """
-    if FLEET_ERROR:
-        return jsonify(error=f"printers.json unreadable: {FLEET_ERROR}"), 500
-    if not FLEET:
-        return jsonify(error="no printers configured in printers.json"), 500
+    config, config_error = fleet.load(HUB_DIR)
+    if config_error:
+        return jsonify(error=f"{fleet.CONFIG_NAME} unreadable: {config_error}"), 500
+
+    # Only configured printers, and only ones whose card and blob are actually
+    # on disk. A printer with a missing blob would print unpinned and report
+    # success, so it is refused by name rather than attempted.
+    entries, skipped = [], []
+    for queue, entry in config.items():
+        resolved, problems = fleet.resolve(HUB_DIR, entry)
+        if not resolved.get("devmode") or not resolved.get("card"):
+            problems.append("needs both a card and a devmode blob")
+        if problems:
+            skipped.append({"queue": queue, "why": problems})
+            continue
+        entries.append({"name": entry.get("label") or queue, "queue": queue,
+                        "card": resolved["card"], "devmode": resolved["devmode"]})
+
+    if not entries:
+        return jsonify(
+            error=f"no usable printers in {fleet.CONFIG_NAME}",
+            skipped=skipped,
+        ), 500
 
     dry = request.args.get("dry_run") in ("1", "true", "yes")
     batch = request.args.get("job_id") or str(uuid.uuid4())[:8]
@@ -234,8 +255,8 @@ def demo():
     def one(entry):
         started = time.perf_counter() - t0
         cmd = [str(CHILD_PYTHON), "-m", "printhub.render",
-               entry["queue"], str(HUB_DIR / entry["card"]),
-               "--devmode", str(HUB_DIR / entry["devmode"]),
+               entry["queue"], entry["card"],
+               "--devmode", entry["devmode"],
                "--name", f"demo-{batch}-{entry['name']}"]
         if dry:
             cmd.append("--dry-run")
@@ -258,8 +279,8 @@ def demo():
             "error": (p.stderr.strip()[:300] or None) if p.returncode else None,
         }
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(FLEET)) as pool:
-        results = list(pool.map(one, FLEET))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(entries)) as pool:
+        results = list(pool.map(one, entries))
 
     wall = time.perf_counter() - t0
     sent = sum(1 for r in results if r["state"] == "sent")
@@ -288,21 +309,25 @@ def api_state():
     Nothing here ever reports a printer as ready. `idle` means no fault was
     reported, which is not the same claim - see printhub.faults.
     """
-    entries = FLEET
-    if not entries and QUEUE:
-        entries = [{"name": QUEUE, "queue": QUEUE}]
-
-    # One WMI query for the whole fleet. None means WMI could not be asked,
-    # which is not the same as nothing being offline, so it is passed through
-    # rather than flattened to False.
-    offline = faults.offline_queues()
+    config, config_error = fleet.load(HUB_DIR)
 
     printers = []
-    for entry in entries:
-        is_offline = None if offline is None else entry["queue"] in offline
-        reading = faults.read(entry["queue"], offline=is_offline)
-        reading["name"] = entry.get("name") or entry["queue"]
-        reading["note"] = entry.get("note")
+    for q in faults.enumerate_queues():
+        # Offline comes from the same enumeration, so it costs nothing extra.
+        reading = faults.read(q["queue"], offline=q["offline"])
+        entry = config.get(q["queue"], {})
+        resolved, problems = fleet.resolve(HUB_DIR, entry)
+        reading.update(
+            name=entry.get("label") or q["queue"],
+            note=entry.get("note"),
+            configured=bool(entry),
+            pinned=bool(resolved.get("devmode")) and not problems,
+            dialog_port=q["dialog_port"],
+            duplicate_port=q["duplicate_port"],
+            shared=q["shared"],
+            network=q["network"],
+            config_problems=problems,
+        )
         printers.append(reading)
 
     return jsonify(
@@ -314,7 +339,8 @@ def api_state():
             "devmode_error": DEVMODE_ERROR,
             "renderer": "pdfium",
             "jobs_seen": len(seen),
-            "fleet_error": FLEET_ERROR,
+            "config_error": config_error,
+            "configured": sum(1 for p in printers if p["configured"]),
         },
         printers=printers,
         polled_at=time.time(),

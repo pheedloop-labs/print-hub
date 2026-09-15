@@ -7,13 +7,26 @@
   let flagged = $derived(
     hub.printers.filter((p) => NEEDS_ATTENTION.includes(p.state))
   )
+  let configured = $derived(hub.printers.filter((p) => p.configured))
+
+  // Configured printers first: the hub's own are what staff came to look at,
+  // and the rest are context. Within each group, trouble rises.
+  let ordered = $derived(
+    [...hub.printers].sort((a, b) => {
+      if (a.configured !== b.configured) return a.configured ? -1 : 1
+      const aBad = NEEDS_ATTENTION.includes(a.state)
+      const bBad = NEEDS_ATTENTION.includes(b.state)
+      if (aBad !== bBad) return aBad ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+  )
 </script>
 
 <section>
   <div class="head">
     <h2>Printers</h2>
     <p class="count">
-      {hub.printers.length} configured{#if flagged.length}, <strong
+      {hub.printers.length} on this computer, {configured.length} configured{#if flagged.length}, <strong
           >{flagged.length} need attention</strong
         >{/if}
     </p>
@@ -23,24 +36,24 @@
     <p class="empty">Reading printers…</p>
   {:else if hub.printers.length === 0}
     <p class="empty">
-      No printers configured. The hub reads its fleet from <code
-        >printers.json</code
-      >.
+      Windows reports no print queues on this machine at all.
     </p>
   {:else}
     <div class="grid">
-      {#each hub.printers as printer (printer.queue)}
+      {#each ordered as printer (printer.queue)}
         <PrinterCard {printer} />
       {/each}
     </div>
   {/if}
 
   <p class="caveat">
-    A printer is never shown as ready. Every fault these printers can have —
-    empty hopper, ribbon out, jam, cover open — reads as healthy until a job is
-    actually sent, so a green light here would be a claim the hub cannot
-    support. After a jam or ribbon change a printer takes 34–40 seconds to
-    re-initialise, so a fault clearing slowly is normal.
+    This list is every print queue Windows reports on this machine, read
+    fresh on each poll. A printer is never shown as ready: every fault these
+    printers can have — empty hopper, ribbon out, jam, cover open — reads as
+    healthy until a job is actually sent, so a green light here would be a
+    claim the hub cannot support. Offline takes about 20 seconds to appear
+    and never says why. After a jam or ribbon change a printer takes 34–40
+    seconds to re-initialise, so a fault clearing slowly is normal.
   </p>
 </section>
 
@@ -102,7 +115,4 @@
     max-width: 68ch;
   }
 
-  code {
-    font-family: var(--mono);
-  }
 </style>

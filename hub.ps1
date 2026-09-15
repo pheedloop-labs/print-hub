@@ -192,7 +192,7 @@ function Task-Help {
     Write-Host "    build              build into printhub/static, which the hub serves"
     Write-Host ""
     Write-Host "  Print" -ForegroundColor Cyan
-    Write-Host "    demo [-Dry]        every printer in printers.json at once"
+    Write-Host "    demo [-Dry]        every configured printer at once"
     Write-Host "    print -Pdf <file>  send one PDF to HUB_QUEUE"
     Write-Host "    printers           queues this box can see"
     Write-Host ""
@@ -467,9 +467,28 @@ function Task-Status {
     Write-Item "queue" $h.queue
     Write-Item "renderer" $h.renderer
     Write-Item "jobs seen" $h.jobs_seen
-    if ($h.fleet) { Write-Item "fleet" ($h.fleet -join ", ") }
     if ($h.devmode_error) { Write-Bad "devmode_error: $($h.devmode_error)" }
-    if ($h.fleet_error) { Write-Warn "fleet_error: $($h.fleet_error)" }
+    if ($h.config_error) { Write-Warn "config_error: $($h.config_error)" }
+
+    # The printer list is live from Windows; only the per-printer config is
+    # stored. Show both counts so "8 queues, 5 configured" is visible here
+    # and not only in the console.
+    $s = Invoke-Hub "/api/state"
+    if ($null -ne $s) {
+        Write-Head "Printers (live from Windows)"
+        Write-Item "queues seen" "$($s.printers.Count), $($s.hub.configured) configured"
+        foreach ($p in $s.printers) {
+            $notes = @()
+            if (-not $p.configured) { $notes += "not configured" }
+            elseif (-not $p.pinned) { $notes += "NOT PINNED" }
+            if ($p.dialog_port) { $notes += "opens a dialog" }
+            if ($p.duplicate_port) { $notes += "shares a port" }
+            $line = "  {0,-28} {1,-10} {2}" -f $p.queue, $p.state, ($notes -join ", ")
+            if ($p.state -eq "fault" -or $p.state -eq "unreachable") { Write-Host $line -ForegroundColor Red }
+            elseif ($p.state -eq "offline" -or $p.state -eq "stalled") { Write-Host $line -ForegroundColor Yellow }
+            else { Write-Host $line }
+        }
+    }
 
     Write-Head "Console"
     switch (Get-Console-Staleness) {
@@ -607,14 +626,24 @@ function Task-Cards {
     Assert-Venv
     Write-Head "Regenerating the fleet's calibration cards"
     # Page size comes from the filename; the caliper targets do NOT, so they
-    # are recorded in printers.json. Letting the generator default them once
+    # are recorded per printer. Letting the generator default them once
     # silently re-authored the Epson card with a 50 mm vertical target in
     # place of its 250 mm one, and nothing about the card looks wrong
     # afterwards. Refuse rather than guess.
-    $cfg = Get-Content (Join-Path $ROOT "printers.json") -Raw | ConvertFrom-Json
+    $cfgPath = Join-Path $ROOT "printers.local.json"
+    if (-not (Test-Path $cfgPath)) {
+        Write-Bad "no printers.local.json - nothing is configured on this box."
+        Write-Host "  The printer LIST is live from Windows and needs no file;"
+        Write-Host "  this is only the per-printer card and blob config."
+        exit 1
+    }
+    $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
     Push-Location $ROOT
     try {
-        foreach ($p in $cfg.printers) {
+        # Keyed by queue name, so walk the properties rather than an array.
+        foreach ($queue in $cfg.printers.PSObject.Properties.Name) {
+            $p = $cfg.printers.$queue
+            if (-not $p.card) { Write-Warn "$queue : no card configured - skipped"; continue }
             $leaf = Split-Path $p.card -Leaf
             if ($leaf -notmatch 'test-card-([0-9.]+)x([0-9.]+)\.pdf') {
                 Write-Bad "cannot parse a page size out of $leaf - skipped"
@@ -622,8 +651,8 @@ function Task-Cards {
             }
             $w = $matches[1]; $h = $matches[2]
             if ($null -eq $p.targets -or $p.targets.Count -ne 2) {
-                Write-Bad "$($p.name): no 'targets' in printers.json - skipped"
-                Write-Host "         Add \"targets\": [horizontal, vertical] in mm."
+                Write-Bad "$queue : no 'targets' configured - skipped"
+                Write-Host "         Add a targets: [horizontal, vertical] pair, in mm."
                 continue
             }
             & $PY (Join-Path $ROOT "tools\make_test_card.py") `

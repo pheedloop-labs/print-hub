@@ -27,21 +27,14 @@ Two rules this module exists to enforce, both of them findings:
 
 **Offline needs a fourth source, and it is not optional.** The spooler never
 sets PRINTER_STATUS_OFFLINE on any printer tested, `Get-Printer` reports
-Normal, and `DetectedErrorState` reads 0. WMI `WorkOffline` is the only
-signal that exists (Verified 55). Skipping it was tried, on the grounds that
-a bitless queued job approximates it; that approximation is worth nothing
-while the queue is empty, and the console cheerfully reported "No fault
-reported" for two printers that were switched off. One WMI query covers the
-whole fleet, so it costs one round trip per poll rather than one per printer.
+Normal, and `DetectedErrorState` reads 0. Skipping the question was tried, on
+the grounds that a bitless queued job approximates it; that approximation is
+worth nothing while the queue is empty, and the console cheerfully reported
+"No fault reported" for two printers that were switched off.
 
-Two caveats it carries. WorkOffline takes about 20 seconds to flip after a
-device disappears, and it never says why. And Windows' own "Use Printer
-Offline" setting sets the same flag, so the honest wording is "reported
-offline", not "unplugged".
+The source is the Attributes field, not Status, and not WMI. See
+enumerate_queues.
 """
-
-import threading
-import time
 
 import win32print
 
@@ -84,70 +77,77 @@ def _decode(value, table):
     return [name for bit, name, *_ in table if value & bit]
 
 
-_com_ready = threading.local()
-_offline_lock = threading.Lock()
-_offline_cache = {"at": -1e9, "value": None}
+ENUM_FLAGS = (win32print.PRINTER_ENUM_LOCAL
+              | win32print.PRINTER_ENUM_CONNECTIONS)
 
-# WMI costs about 1.1 s on this box, which is half a poll interval, and
-# WorkOffline takes roughly 20 s to flip anyway. Caching for a few seconds
-# therefore adds nothing measurable to a signal that is already slow, and
-# takes the cost off almost every request.
-OFFLINE_TTL = 5.0
+# Attributes bits. These are NOT the Status bits and do not overlap them.
+ATTR_SHARED = 0x008
+ATTR_NETWORK = 0x010
+ATTR_LOCAL = 0x040
+ATTR_WORK_OFFLINE = 0x400
+
+# A port that opens a save dialog. A modal dialog on a headless box is an
+# outage (design rule 5), so a queue on one is listed and marked unusable
+# rather than quietly offered as somewhere to print.
+DIALOG_PORTS = ("PORTPROMPT:",)
 
 
-def _ensure_com():
-    """CoInitialize once per thread, and never uninitialize.
+def enumerate_queues():
+    """Every print queue this process can see, with its offline flag.
 
-    The hub is served by waitress on worker threads and COM raises
-    "CoInitialize has not been called" on any thread that has not done so.
-    Uninitializing after each query was tried and is wrong: it tears COM down
-    while the result objects are still alive, which prints "Win32 exception
-    occurred releasing IUnknown" to the service log. Worker threads are
-    long-lived, so initialize once and leave it.
+    One call gives the list, the driver, the port and whether Windows
+    considers the printer offline, in about 2 ms.
+
+    **Offline comes from Attributes, not Status.** Closed task 4 found that
+    PRINTER_STATUS_OFFLINE is never set by any printer on this bench, and
+    concluded WMI WorkOffline was the only signal that exists. That is true
+    of the Status field only. PRINTER_ATTRIBUTE_WORK_OFFLINE in the
+    Attributes field is the same underlying spooler flag WMI reports, read
+    directly instead of through COM. Checked against WMI across all eight
+    queues on this box with two printers switched off: identical answers,
+    2 ms against 935 ms. The WMI path is gone, and with it a COM-per-thread
+    hazard and a cache that only existed to hide the cost.
+
+    The 20 second caveat is unchanged, because it is the same flag. A printer
+    that vanishes takes about that long to be marked offline, and the flag
+    never says why. Windows' own "Use Printer Offline" setting sets it too,
+    so the honest wording is "reported offline", not "unplugged".
     """
-    if getattr(_com_ready, "done", False):
-        return
-    import pythoncom
-    pythoncom.CoInitialize()
-    _com_ready.done = True
+    queues = []
+    for p in win32print.EnumPrinters(ENUM_FLAGS, None, 2):
+        port = p.get("pPortName") or ""
+        attrs = p.get("Attributes", 0) or 0
+        queues.append({
+            "queue": p["pPrinterName"],
+            "driver": p.get("pDriverName"),
+            "port": port,
+            "offline": bool(attrs & ATTR_WORK_OFFLINE),
+            "shared": bool(attrs & ATTR_SHARED),
+            "network": bool(attrs & ATTR_NETWORK),
+            "dialog_port": any(port.upper().startswith(d)
+                               for d in DIALOG_PORTS),
+        })
 
+    # Two queues on one port is how the orphan Epson looks: enumerable,
+    # identical in every public field, and one of them not usable. Nothing
+    # else distinguishes them, so flag the pair and let a human decide
+    # (CLAUDE.MD gotchas: never assume an enumerated queue is a usable one).
+    counts = {}
+    for q in queues:
+        counts[q["port"]] = counts.get(q["port"], 0) + 1
+    for q in queues:
+        q["duplicate_port"] = counts[q["port"]] > 1
 
-def _query_offline():
-    try:
-        import win32com.client
-        _ensure_com()
-        wmi = win32com.client.GetObject("winmgmts:")
-        rows = wmi.ExecQuery("SELECT Name, WorkOffline FROM Win32_Printer")
-        return {row.Name for row in rows if row.WorkOffline}
-    except Exception:
-        return None
-
-
-def offline_queues(max_age=OFFLINE_TTL):
-    """Queue names WMI reports as offline, or None if WMI could not be asked.
-
-    One query for every printer, not one per printer: five round trips per
-    poll would be the expensive version of this.
-
-    None and an empty set mean different things and must not be collapsed.
-    Empty means WMI answered and nothing is offline; None means the question
-    could not be put, so the caller must not claim a printer is online.
-    """
-    now = time.monotonic()
-    with _offline_lock:
-        if now - _offline_cache["at"] < max_age:
-            return _offline_cache["value"]
-        value = _query_offline()
-        _offline_cache["at"] = now
-        _offline_cache["value"] = value
-        return value
+    return sorted(queues, key=lambda q: q["queue"].lower())
 
 
 def read(queue, offline=None):
     """Return one honest reading for a queue. Opens and closes a handle.
 
-    offline is this queue's WMI WorkOffline flag, or None when WMI could not
-    be asked. Pass it from offline_queues() so one query serves the fleet.
+    offline is this queue's work-offline flag from enumerate_queues(), or
+    None when it was not looked up. None and False are not the same: None
+    means nobody asked, and an idle reading says so rather than implying the
+    printer was checked and found present.
     """
     out = {
         "queue": queue,
