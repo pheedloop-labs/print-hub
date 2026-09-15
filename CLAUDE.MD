@@ -131,12 +131,14 @@ C:/hub/
   hub.py              entry point. The service runs waitress-serve hub:app
   requirements.txt    direct dependencies, pinned
   printers.local.json per-box printer config. Gitignored, see fleet.py
+  identity.json       hub and printer ids. Gitignored. Losing it breaks pairing
   printhub/           the rig
     app.py            Flask. Serves the console at / and the API
     render.py         PDFium raster, GDI blit, exact scale by construction
     devmode.py        capture and replay a DEVMODE, vendor bytes included
     faults.py         enumerate the queues, and read one honest state each
     fleet.py          per-printer config: which blob to pin, which card
+    identity.py       stable ids for this hub and its printers, and its IP
     journal.py        the job record. Per-day JSONL, survives a restart
     watcher.py        polls every queue at 0.5 s. The only thing fast enough
     static/           the BUILT console. Committed, see below
@@ -147,7 +149,7 @@ C:/hub/
     make_test_card.py calibration cards at any page size, written to cards/
     spike4_monitor.py polls a queue, logs every state change, with timing
   cards/              calibration cards, one per printer in the fleet
-  docs/               the bench record, the memo, the raw fault timelines
+  docs/               the bench record, the memo, timelines, the app API
   devmode/            captured blobs. Restore points, not source. Gitignored
   journal/            the job record, one JSONL per day. Gitignored
   spool/              saved job PDFs. Safe to delete. Gitignored
@@ -1246,6 +1248,44 @@ started, and it answers with the old code.
     The vocabulary is constrained on purpose. The journal can say `accepted`,
     `spooled`, `fault`, `cleared` and `failed`. It cannot say printed, and
     `cleared` carries the text "this does not mean a badge exists".
+
+62. **The OnSite app's API exists, and it is deliberately thin.** `/api/v1`
+    gives the app four things: who this hub is and how to reach it, a list of
+    printers by id, a way to send a PDF to one of them, and a way to ask what
+    happened. Contract in `docs/onsite-api.md`.
+
+    **The hub routes; it does not describe.** No page sizes, media types or
+    driver settings are published, on the operator's instruction and for a
+    good reason of our own: every driver on this bench has misdescribed
+    itself at least once, so a published media assumption would invite the
+    app to trust a number we know can be wrong. Choosing the right badge for
+    the right printer is the app's business.
+
+    Three things worth not undoing:
+
+    - **Ids, not names.** Printer ids are assigned once and persisted in
+      `identity.json`, keyed by queue name, which survives the remove-and-
+      re-add case in Verified 56. A rename re-issues the id; there is nothing
+      better to key on, as no driver here exposes a durable serial.
+    - **Link-local addresses are never advertised.** `getaddrinfo` reports
+      this box's 169.254 Ethernet address alongside the real one. Handing the
+      app the link-local one would look correct and never connect, so
+      `identity.addresses()` filters it and puts the routable address first.
+    - **`accepting` is not `ready`, and the docs say so twice.** It means the
+      hub would take a job, not that a badge will emerge. The same rule the
+      console follows, restated for a client we do not control.
+
+    The app-facing print route renders in a **child process**, unlike
+    `/print`. This is the one route that takes PDFs the hub did not author,
+    and PDFium runs in-process, so a malformed file would otherwise take the
+    agent down with it. That closes later-task 1 for the route that will
+    actually carry traffic.
+
+    `Microsoft Print to PDF` is listed but refused, with reason
+    `opens_dialog`. It is enumerable, looks like a printer, and would hang
+    the print path on a machine with no screen (design rule 5). The list and
+    the print route agree on this: a printer advertised as accepting and then
+    refused would be worse than either alone.
 
 ## Closed task 1 — the card print failed because of the renderer
 

@@ -56,3 +56,7 @@ printers.local.json
 
 # The job record. Runtime output and machine-local, like spool/.
 journal/
+
+# Stable ids for this hub and its printers. Machine-local: losing it re-issues
+# every id and breaks whatever the OnSite app had paired to.
+identity.json

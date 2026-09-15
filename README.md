@@ -54,6 +54,7 @@ Some of the specifics, all reproducible from the notes:
 - **`docs/printer-benchmark.html`** compares the five printers field by field, and
   carries the reproducible procedure for adding a sixth. Untested is marked as
   untested throughout rather than inferred.
+- **`docs/onsite-api.md`** is the API contract for the OnSite app.
 - **`docs/spike-memo.html`** is the decision memo, written in Simplified Technical
   English.
 
@@ -68,6 +69,7 @@ Some of the specifics, all reproducible from the notes:
 | `printhub/devmode.py` | capture and replay a queue's DEVMODE, vendor-private bytes included |
 | `printhub/faults.py` | enumerate the queues, and read one honest state each from three disagreeing sources |
 | `printhub/fleet.py` | per-printer config for this box: which blob to pin, which card to send |
+| `printhub/identity.py` | stable ids for the hub and its printers, and which address to advertise |
 | `printhub/journal.py` | the job record: per-day JSONL, durable dedupe, and never the word printed |
 | `printhub/watcher.py` | polls every queue at 0.5 s, the only thing fast enough to see a job |
 | `console/` | the hub console: Svelte + Vite, PheedLoop design tokens |

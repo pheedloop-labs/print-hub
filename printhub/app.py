@@ -24,6 +24,7 @@ import hashlib
 import json
 import os
 import pathlib
+import socket
 import subprocess
 import sys
 import time
@@ -32,7 +33,8 @@ import uuid
 import win32print
 from flask import Flask, jsonify, request, send_from_directory
 
-from . import faults, fleet, journal as journal_mod, render, watcher as watcher_mod
+from . import (faults, fleet, identity as identity_mod,
+               journal as journal_mod, render, watcher as watcher_mod)
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 HUB_DIR = pathlib.Path(os.environ.get("HUB_DIR", ROOT))
@@ -78,6 +80,11 @@ JOURNAL = journal_mod.Journal(HUB_DIR)
 WATCHER = watcher_mod.Watcher(JOURNAL)
 WATCHER.start()
 
+# Stable ids for this hub and its printers, for the OnSite app to address.
+IDENTITY = identity_mod.Identity(HUB_DIR)
+API_VERSION = "1"
+PORT = 8080
+
 
 def _config():
     """Per-printer config, ignoring a read error. Callers that care use
@@ -116,6 +123,18 @@ def offline_refusal(queue):
     for q in faults.enumerate_queues():
         if q["queue"] != queue:
             continue
+        if q["dialog_port"]:
+            # Design rule 5. This queue prompts for a filename, and a modal
+            # dialog on a machine with no screen is an outage that blocks the
+            # whole print path until somebody clicks it. Never reachable.
+            return jsonify(
+                state="refused",
+                reason="opens_dialog",
+                queue=queue,
+                error=(f"{queue} prompts for a filename and would hang the "
+                       f"print path on a machine with no screen. It cannot be "
+                       f"printed to."),
+            ), 409
         if q["offline"]:
             return jsonify(
                 state="refused",
@@ -525,6 +544,229 @@ def api_test_page():
         # Same word as everywhere else. The watcher will say what the spooler
         # did with it, and none of that proves a badge exists.
         note="sent to the spooler, which is not a promise that a badge exists",
+    )
+
+
+# ---------------------------------------------------------------------------
+# The OnSite app's API. Versioned, because this one has a client that is not
+# in this repository and cannot be changed in the same commit.
+#
+# Deliberately thin. The hub routes a job to a printer and says what happened
+# to it. It does NOT describe media, page sizes or driver settings: choosing
+# the right badge for the right printer is the app's business, and a hub that
+# published its media assumptions would invite the app to trust them.
+#
+# Every printer is addressed by id, never by name. Names are for humans and
+# they change; see printhub.identity.
+# ---------------------------------------------------------------------------
+
+
+def _printer_rows():
+    """One row per enumerated queue, with its stable id attached."""
+    config, _ = fleet.load(HUB_DIR)
+    rows = []
+    for q in faults.enumerate_queues():
+        entry = config.get(q["queue"], {})
+        rows.append({
+            "printer_id": IDENTITY.printer_id(q["queue"]),
+            "name": entry.get("label") or q["queue"],
+            "queue": q["queue"],
+            "driver": q["driver"],
+            "offline": q["offline"],
+            "dialog_port": q["dialog_port"],
+        })
+    return rows
+
+
+@app.get("/api/v1/hub")
+def api_hub():
+    """Who this hub is, where it is, and what it can be asked.
+
+    The endpoint list is here so the app discovers the API rather than
+    hardcoding paths: a hub on an older build can advertise fewer of them
+    without the app guessing.
+    """
+    addrs = identity_mod.addresses()
+    primary = addrs[0] if addrs else None
+    return jsonify(
+        hub_id=IDENTITY.hub_id,
+        name=socket.gethostname(),
+        api_version=API_VERSION,
+        # Link-local addresses are excluded: this box has one, it looks like
+        # a real address and nothing can reach it (printhub.identity).
+        address=primary,
+        addresses=addrs,
+        port=PORT,
+        base_url=f"http://{primary}:{PORT}" if primary else None,
+        endpoints={
+            "hub": "/api/v1/hub",
+            "printers": "/api/v1/printers",
+            "print": "/api/v1/print",
+            "job": "/api/v1/jobs/{job_id}",
+        },
+    )
+
+
+@app.get("/api/v1/qr.png")
+def api_qr():
+    """The hub's base URL as a QR, so nobody types an address on an iPad.
+
+    Encodes the URL only. Pairing (ENG-3781) will add a token to this, which
+    is why it is generated per request rather than cached: the day it carries
+    a credential, a stale image would be worse than a slow one.
+    """
+    import io
+    import qrcode
+
+    addrs = identity_mod.addresses()
+    if not addrs:
+        return jsonify(error="This hub has no routable address."), 503
+
+    img = qrcode.make(f"http://{addrs[0]}:{PORT}")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue(), 200, {"Content-Type": "image/png",
+                                 "Cache-Control": "no-store"}
+
+
+@app.get("/api/v1/printers")
+def api_printers():
+    """Every printer this hub can route to.
+
+    `accepting` is whether the hub would take a job for it right now. It is
+    NOT a readiness claim: no printer on this bench reports a fault until a
+    job is actually sent, so a printer that is accepting may still be out of
+    ribbon, jammed or with its lid open. Render it as "can be sent to", never
+    as a green light.
+    """
+    rows = []
+    for row in _printer_rows():
+        # Whatever is said here, /api/v1/print must agree: a printer listed
+        # as accepting and then refused would be worse than either alone.
+        reason = None
+        if row["dialog_port"]:
+            reason = "opens_dialog"
+        elif row["offline"]:
+            reason = "offline"
+        rows.append({
+            "printer_id": row["printer_id"],
+            "name": row["name"],
+            "queue": row["queue"],
+            "accepting": reason is None,
+            "reason": reason,
+        })
+    return jsonify(hub_id=IDENTITY.hub_id, printers=rows)
+
+
+@app.post("/api/v1/print")
+def api_print():
+    """Send a PDF to one printer, by id.
+
+    The client generates job_id and redelivery is normal, not exceptional
+    (design rule 1). Reports "sent", never "printed": nothing in the print
+    path can confirm a badge reached a tray (design rule 2).
+
+    Renders in a child process. This route takes PDFs the hub did not
+    author, and PDFium runs in-process, so a malformed file would otherwise
+    take the whole agent down with it.
+    """
+    printer_id = (request.form.get("printer_id")
+                  or request.args.get("printer_id") or "")
+    job_id = (request.form.get("job_id") or request.args.get("job_id")
+              or str(uuid.uuid4()))
+
+    queue = IDENTITY.queue_for(printer_id)
+    if not queue:
+        return jsonify(state="refused", reason="unknown_printer",
+                       error=f"No printer with id {printer_id!r} on this hub. "
+                             f"Fetch /api/v1/printers for the current list."), 404
+
+    prior = JOURNAL.seen(job_id)
+    if prior:
+        return jsonify(job_id=job_id, state=prior["state"], deduped=True,
+                       printer_id=printer_id, first_seen=prior["first_seen"])
+
+    if "pdf" not in request.files:
+        return jsonify(state="refused", reason="no_pdf",
+                       error="POST a PDF as the form field 'pdf'"), 400
+
+    refusal = offline_refusal(queue)
+    if refusal:
+        JOURNAL.record("refused", job_id=job_id, queue=queue,
+                       source=request.remote_addr,
+                       detail=refusal[0].get_json()["error"])
+        return refusal
+
+    path = SPOOL_DIR / f"{job_id}.pdf"
+    request.files["pdf"].save(path)
+
+    config, _ = fleet.load(HUB_DIR)
+    entry = config.get(queue, {})
+    resolved, _problems = fleet.resolve(HUB_DIR, entry)
+    blob = resolved.get("devmode")
+
+    JOURNAL.record("accepted", job_id=job_id, queue=queue,
+                   label=entry.get("label"), source=request.remote_addr,
+                   detail=f"Accepted from the app for {printer_id}")
+
+    cmd = [str(CHILD_PYTHON), "-m", "printhub.render", queue, str(path),
+           "--name", f"hub {job_id}"]
+    if blob:
+        cmd += ["--devmode", blob]
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True,
+                              timeout=120, cwd=str(ROOT))
+    except subprocess.TimeoutExpired:
+        JOURNAL.record("failed", job_id=job_id, queue=queue,
+                       detail="Renderer timed out after 120 s")
+        return jsonify(job_id=job_id, state="failed",
+                       error="renderer timed out"), 500
+
+    if proc.returncode != 0:
+        JOURNAL.record("failed", job_id=job_id, queue=queue,
+                       detail=proc.stderr.strip()[:300] or "renderer failed")
+        return jsonify(job_id=job_id, state="failed",
+                       error=proc.stderr.strip()[:300]), 500
+
+    clipped = "clipped=True" in proc.stdout
+    JOURNAL.record("sent", job_id=job_id, queue=queue,
+                   detail="Renderer finished, handed to the spooler",
+                   geometry={"clipped": clipped, "scale_pinned": bool(blob)})
+
+    return jsonify(
+        job_id=job_id,
+        state="sent",
+        printer_id=printer_id,
+        # True when the page did not fit the printable area. The hub prints
+        # it anyway; the app is better placed to decide whether that matters.
+        clipped=clipped,
+        note="sent to the spooler, which is not a promise that a badge exists",
+    )
+
+
+@app.get("/api/v1/jobs/<job_id>")
+def api_job(job_id):
+    """What happened to one job.
+
+    Poll this three to five seconds after sending. The ZC10L reports a fault
+    about a second after the job arrives, so that window catches it, and the
+    app can follow "we've sent your badge" with the actual cause without ever
+    claiming a badge exists.
+    """
+    job = JOURNAL.seen(job_id)
+    if not job:
+        return jsonify(state="unknown", job_id=job_id,
+                       error="No job with that id on this hub."), 404
+    return jsonify(
+        job_id=job_id,
+        state=job["state"],
+        printer=job.get("label") or job.get("queue"),
+        detail=job.get("detail"),
+        fault=job.get("fault"),
+        first_seen=job.get("first_seen"),
+        last_seen=job.get("last_seen"),
+        events=[e["event"] for e in job.get("events", [])],
     )
 
 

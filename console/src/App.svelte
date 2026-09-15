@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { HubState } from './lib/hub.svelte.js'
   import { Router, go } from './lib/router.svelte.js'
+  import Connect from './routes/Connect.svelte'
   import Jobs from './routes/Jobs.svelte'
   import Printer from './routes/Printer.svelte'
   import Printers from './routes/Printers.svelte'
@@ -82,6 +83,9 @@
       Jobs
       <span class="n">{hub.jobs.length}</span>
     </button>
+    <button class:on={router.view === 'connect'} onclick={() => go('connect')}>
+      Connect
+    </button>
   </nav>
 
   <main>
@@ -91,6 +95,8 @@
       <Queue {hub} />
     {:else if router.view === 'jobs'}
       <Jobs {hub} queue={router.queue} />
+    {:else if router.view === 'connect'}
+      <Connect />
     {:else}
       <Printers {hub} />
     {/if}

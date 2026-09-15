@@ -40,3 +40,16 @@ export function sendTestPage(queue) {
     method: 'POST',
   })
 }
+
+/* The OnSite app's own API, read here so the Connect page shows exactly what
+ * the app will see rather than a second description of it. */
+
+/** Hub identity, address and the endpoint list. */
+export function getHub() {
+  return request('/api/v1/hub')
+}
+
+/** Printers as the app sees them: ids, names, and whether they accept. */
+export function getAppPrinters() {
+  return request('/api/v1/printers')
+}
