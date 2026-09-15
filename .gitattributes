@@ -2,3 +2,8 @@
 # would corrupt it, and git guesses "text" for reportlab's small PDFs.
 *.pdf binary
 *.prn binary
+
+# The built console is generated, not edited. Keep it byte-identical to what
+# Vite emits so the committed bundle matches the build that was tested, and
+# so a rebuild on a different machine does not churn the diff.
+printhub/static/** -text

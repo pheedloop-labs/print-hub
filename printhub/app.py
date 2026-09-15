@@ -30,9 +30,9 @@ import time
 import uuid
 
 import win32print
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 
-from . import render
+from . import faults, render
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 HUB_DIR = pathlib.Path(os.environ.get("HUB_DIR", ROOT))
@@ -67,7 +67,11 @@ if DEVMODE_PATH:
 
 SPOOL_DIR.mkdir(parents=True, exist_ok=True)
 
-app = Flask(__name__)
+# static/ is the built console, emitted by `cd console && npm run build`.
+# static_url_path="" serves its assets from the root, so the built index.html
+# needs no <base> and dev and production resolve the same paths. The explicit
+# API routes below are more specific than the static catch-all and still win.
+app = Flask(__name__, static_folder="static", static_url_path="")
 
 # job_id -> state. In memory; making it durable with a 24 h window is task 2.
 seen = {}
@@ -90,6 +94,22 @@ def queue_error():
         error="HUB_QUEUE is not set. Set it to a real printer name.",
         hint='PowerShell: $env:HUB_QUEUE = "HUB-CARD"',
     ), 500
+
+
+@app.get("/")
+def console():
+    """The console, if it has been built.
+
+    Says so plainly when it has not, rather than 404ing: a hub serving a
+    missing console should not look like a hub that is down.
+    """
+    index = pathlib.Path(app.static_folder) / "index.html"
+    if not index.exists():
+        return jsonify(
+            error="The console has not been built.",
+            hint="cd console && npm install && npm run build",
+        ), 503
+    return send_from_directory(app.static_folder, "index.html")
 
 
 @app.get("/health")
@@ -255,6 +275,43 @@ def demo():
         # Sum against wall clock is the parallelism. Measured 3.4x on five.
         serial_ms=round(sum(r.get("took_ms", 0) for r in results), 1),
         printers=results,
+    )
+
+
+@app.get("/api/state")
+def api_state():
+    """Everything the console's printer view needs, in one poll.
+
+    One call rather than one per printer: the console is read from a phone
+    on venue wifi, where five round trips is meaningfully worse than one.
+
+    Nothing here ever reports a printer as ready. `idle` means no fault was
+    reported, which is not the same claim - see printhub.faults.
+    """
+    entries = FLEET
+    if not entries and QUEUE:
+        entries = [{"name": QUEUE, "queue": QUEUE}]
+
+    printers = []
+    for entry in entries:
+        reading = faults.read(entry["queue"])
+        reading["name"] = entry.get("name") or entry["queue"]
+        reading["note"] = entry.get("note")
+        printers.append(reading)
+
+    return jsonify(
+        hub={
+            "queue": QUEUE or None,
+            "scale_pinned": DEVMODE is not None,
+            "devmode_sha256": (hashlib.sha256(DEVMODE).hexdigest()[:16]
+                               if DEVMODE else None),
+            "devmode_error": DEVMODE_ERROR,
+            "renderer": "pdfium",
+            "jobs_seen": len(seen),
+            "fleet_error": FLEET_ERROR,
+        },
+        printers=printers,
+        polled_at=time.time(),
     )
 
 

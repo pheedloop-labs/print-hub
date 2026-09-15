@@ -40,3 +40,10 @@ out.pdf
 # Currently: Brother QL-800, EPSON CW-C4000u, DYMO Connect, Zebra ZC10L,
 # Zebra ZD621.
 Drivers/
+
+# Console build toolchain. Node is a dev-machine dependency only.
+# printhub/static/ (the build output) IS committed on purpose: a hub must be
+# standable on a plain machine with Python and nothing else (ENG-3790), and
+# hub.ps1 status flags the build going stale against console/src.
+console/node_modules/
+console/.vite/

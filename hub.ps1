@@ -45,6 +45,8 @@ $PORT      = 8080
 $BASE      = "http://127.0.0.1:$PORT"
 $LOG       = Join-Path $ROOT "service.log"
 $FWRULE    = "PheedLoop Hub 8080"
+$CONSOLE   = Join-Path $ROOT "console"
+$STATIC    = Join-Path $ROOT "printhub\static"
 
 # Spooler status bits. Only truthful while a job is in flight (Verified 29).
 $STATUS_BITS = @{
@@ -97,7 +99,8 @@ function Invoke-Nssm($action) {
     # nssm writes failures to stderr and they are easy to swallow. Never
     # pipe this to Out-Null: a silently failed restart leaves the OLD code
     # serving, answering /health correctly the whole time.
-    $out = (& $NSSM $action $SERVICE 2>&1 | Out-String).Trim()
+    # nssm writes UTF-16, which arrives here as text interleaved with NULs.
+    $out = ((& $NSSM $action $SERVICE 2>&1 | Out-String) -replace "`0", "").Trim()
     $ok = ($LASTEXITCODE -eq 0)
     if (-not $ok) {
         Write-Bad "nssm $action failed (exit $LASTEXITCODE)"
@@ -122,6 +125,31 @@ function Assert-Venv {
     if (-not (Test-Path $PY)) {
         Write-Bad "No venv at $VENV"
         Write-Host "  Run:  .\hub.ps1 install"
+        exit 1
+    }
+}
+
+function Get-Console-Staleness {
+    # A built bundle can disagree with its source, and nothing at runtime
+    # would say so - the same shape of failure as a stale service process
+    # answering /health perfectly. Two sources that can disagree, so compare
+    # them (Verified 57).
+    if (-not (Test-Path $STATIC)) { return "unbuilt" }
+    $src = @(Get-ChildItem (Join-Path $CONSOLE "src") -Recurse -File -ErrorAction SilentlyContinue) +
+           @(Get-Item (Join-Path $CONSOLE "index.html") -ErrorAction SilentlyContinue)
+    if ($src.Count -eq 0) { return "nosource" }
+    $newestSrc = ($src | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
+    $built = @(Get-ChildItem $STATIC -Recurse -File -ErrorAction SilentlyContinue)
+    if ($built.Count -eq 0) { return "unbuilt" }
+    $newestBuilt = ($built | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime
+    if ($newestSrc -gt $newestBuilt) { return "stale" }
+    return "current"
+}
+
+function Assert-Node {
+    try { & node --version | Out-Null } catch {
+        Write-Bad "node is not on PATH. The console needs it (dev machine only)."
+        Write-Host "  winget install --id OpenJS.NodeJS.LTS --source winget"
         exit 1
     }
 }
@@ -158,6 +186,10 @@ function Task-Help {
     Write-Host "    dev                foreground on port $PORT, Ctrl-C to quit"
     Write-Host "    status             service, environment, health, queue"
     Write-Host "    logs [-Tail N] [-Follow]"
+    Write-Host ""
+    Write-Host "  Console" -ForegroundColor Cyan
+    Write-Host "    console            Vite dev server on :5173, /api proxied. No rebuilds"
+    Write-Host "    build              build into printhub/static, which the hub serves"
     Write-Host ""
     Write-Host "  Print" -ForegroundColor Cyan
     Write-Host "    demo [-Dry]        every printer in printers.json at once"
@@ -349,7 +381,27 @@ function Task-Restart {
     if (-not $svc) { Write-Bad "$SERVICE is not registered. .\hub.ps1 install-service"; exit 1 }
 
     $before = Get-Hub-Pid
-    if (-not (Invoke-Nssm "restart")) { exit 1 }
+
+    # Deliberately not `nssm restart`. Its stop has a short fixed timeout, and
+    # when waitress takes longer than that it reports SERVICE_STOP_PENDING and
+    # gives up - having already stopped the service and never started it
+    # again. Stop, wait for Stopped ourselves, then start.
+    if (-not (Invoke-Nssm "stop")) {
+        Write-Warn "stop reported a problem; checking whether it stopped anyway"
+    }
+    $waited = 0
+    while ($waited -lt 30) {
+        $svc = Get-Service-State
+        if ($svc.State -eq "Stopped") { break }
+        Start-Sleep -Milliseconds 500
+        $waited += 0.5
+    }
+    $svc = Get-Service-State
+    if ($svc.State -ne "Stopped") {
+        Write-Bad "still $($svc.State) after 30 s. Not starting on top of it."
+        exit 1
+    }
+    if (-not (Invoke-Nssm "start")) { exit 1 }
     Start-Sleep -Seconds 3
     $after = Get-Hub-Pid
 
@@ -419,6 +471,15 @@ function Task-Status {
     if ($h.devmode_error) { Write-Bad "devmode_error: $($h.devmode_error)" }
     if ($h.fleet_error) { Write-Warn "fleet_error: $($h.fleet_error)" }
 
+    Write-Head "Console"
+    switch (Get-Console-Staleness) {
+        "current"  { Write-Ok "built and current, served at $BASE/" }
+        "stale"    { Write-Bad "SOURCE IS NEWER THAN THE BUILD - run .\hub.ps1 build"
+                     Write-Host "  The hub is serving an older console than console/src." }
+        "unbuilt"  { Write-Warn "not built. Run .\hub.ps1 build" }
+        "nosource" { Write-Warn "no console source found at console/src" }
+    }
+
     $q = Invoke-Hub "/queue"
     if ($null -ne $q) {
         Write-Head "Queue"
@@ -430,6 +491,35 @@ function Task-Status {
         Write-Host "  Faults appear only while a job is in flight (Verified 29)." -ForegroundColor DarkGray
         Write-Host "  There is no truthful pre-flight 'ready' signal." -ForegroundColor DarkGray
     }
+}
+
+function Task-Console {
+    Assert-Node
+    $svc = Get-Service-State
+    if (-not $svc -or $svc.State -ne "Running") {
+        Write-Warn "The hub is not running, so /api will not answer. .\hub.ps1 start"
+    }
+    Write-Head "Vite dev server on :5173, proxying /api to :8080"
+    Write-Host "  Edits appear immediately. Nothing is rebuilt by hand."
+    Write-Host "  From a phone, use this machine's address, not localhost."
+    Push-Location $CONSOLE
+    try { & npm run dev } finally { Pop-Location }
+}
+
+function Task-Build {
+    Assert-Node
+    Write-Head "Building the console into printhub/static"
+    Push-Location $CONSOLE
+    try {
+        if (-not (Test-Path (Join-Path $CONSOLE "node_modules"))) {
+            Write-Host "  node_modules missing, installing first"
+            & npm install
+            if ($LASTEXITCODE -ne 0) { Write-Bad "npm install failed"; exit 1 }
+        }
+        & npm run build
+        if ($LASTEXITCODE -ne 0) { Write-Bad "build failed"; exit 1 }
+    } finally { Pop-Location }
+    Write-Ok "built. The hub serves it at / with no restart needed."
 }
 
 function Task-Dev {
@@ -601,6 +691,8 @@ switch ($Task.ToLower()) {
     "status"            { Task-Status }
     "health"            { Task-Status }
     "dev"               { Task-Dev }
+    "console"           { Task-Console }
+    "build"             { Task-Build }
     "logs"              { Task-Logs }
     "demo"              { Task-Demo }
     "print"             { Task-Print }

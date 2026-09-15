@@ -130,9 +130,12 @@ C:/hub/
   requirements.txt    direct dependencies, pinned
   printers.json       the fleet: queue + card + caliper targets + blob
   printhub/           the rig
-    app.py            Flask, six routes
+    app.py            Flask. Serves the console at / and the API
     render.py         PDFium raster, GDI blit, exact scale by construction
     devmode.py        capture and replay a DEVMODE, vendor bytes included
+    faults.py         one honest reading per queue, from all three sources
+    static/           the BUILT console. Committed, see below
+  console/            the console's Svelte source. Node, dev machine only
   tools/              spike instruments, not runtime
     benchmark.py      one objective row per queue. author_mm is the field
     caps.py           a driver's paper forms, paperkind ids, resolved default
@@ -147,6 +150,14 @@ C:/hub/
 
 The tools import the package, so run them from `C:\hub`. Absolute-path
 invocation works too: each inserts the repo root on `sys.path` itself.
+
+**`printhub/static/` is generated, and it is committed on purpose.** A hub
+must be standable on a plain machine with Python and nothing else, so Node is
+a dev-machine dependency only and the built console ships in the repo. The
+cost of that is a bundle that can disagree with its source, which is the same
+shape of failure as a stale service process answering `/health` perfectly, so
+`hub.ps1 status` compares `console/src` mtimes against the build and says so
+in red. Run `.\hub.ps1 build` after any console change.
 
 **Renamed in the restructure:** `pdfium_print.py` is now `printhub/render.py`
 and `make-test-card.py` is now `tools/make_test_card.py`. The Verified ledger

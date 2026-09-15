@@ -66,6 +66,8 @@ Some of the specifics, all reproducible from the notes:
 | `printhub/app.py` | Flask rig. `/health`, `/printers`, `/print`, `/demo`, `/jobs`, `/queue` |
 | `printhub/render.py` | the renderer: PDFium raster, GDI blit, exact scale by construction |
 | `printhub/devmode.py` | capture and replay a queue's DEVMODE, vendor-private bytes included |
+| `printhub/faults.py` | one honest reading per queue, from all three disagreeing sources |
+| `console/` | the hub console: Svelte + Vite, PheedLoop design tokens |
 | `printers.json` | the fleet: queue, card, caliper targets and blob, which travel together |
 | `tools/benchmark.py` | one objective row per queue, including the exact page size to author at |
 | `tools/caps.py` | a driver's paper forms, paperkind ids and resolved defaults |
