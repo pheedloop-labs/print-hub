@@ -54,17 +54,31 @@ not use it for printer state. See the rules above.
 ## Layout
 
     src/
-      main.js                 mount
-      App.svelte              shell: header, connection state, view
+      main.js                 mount, and the .dark class from the device
+      App.svelte              shell: header, nav, connection state
       app.css                 design tokens. `idle` is grey on purpose
       lib/
         api.js                fetch wrappers
         hub.svelte.js         polling, keeps the last good reading
+        router.svelte.js      hash router, ~30 lines
       components/
         StatusPill.svelte     the component that must not lie
         PrinterCard.svelte    one printer, and which source reported what
+        QueueTable.svelte     what is in a spooler right now
+        TestPageButton.svelte confirms first, warns harder when offline
       routes/
-        Printers.svelte       ENG-3782
+        Printers.svelte       the grid                        ENG-3782
+        Printer.svelte        one printer: spooler, driver, config, history
+        Queue.svelte          every spooler, globally
+        Jobs.svelte           the job record                  ENG-3783
 
-Still to build: per-printer configuration (ENG-3784), the job record
-(ENG-3783), and pairing (ENG-3781).
+Routes are hashes (`#/printers/<queue>`), because Flask serves this from a
+static folder and a real path would 404 on refresh.
+
+**Two different things get called "queue".** Spooler is what is in the
+spooler *right now* and is normally empty, since a job passes through in
+about 1.4 seconds. Jobs is the record of what the hub was asked to print,
+written by a watcher polling at 0.5 s. An empty Spooler view proves nothing
+either way.
+
+Still to build: per-printer configuration (ENG-3784) and pairing (ENG-3781).

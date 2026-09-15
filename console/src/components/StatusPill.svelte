@@ -17,6 +17,9 @@
     // Amber rather than red: the printer has not reported anything wrong,
     // it is not there to report. Different diagnosis, different fix.
     offline: 'Offline',
+    // Also not a fault. Somebody paused the queue, or a purge left it
+    // paused, and the fix is to resume it rather than go and look.
+    paused: 'Paused',
     stalled: 'Stalled',
     unreachable: 'Unreachable',
     unknown: 'Unknown',
@@ -88,13 +91,15 @@
   }
 
   .stalled,
-  .offline {
+  .offline,
+  .paused {
     background: rgb(var(--state-warn-bg));
     color: rgb(var(--state-warn-fg));
     border-color: rgb(var(--state-warn-fg) / 0.3);
   }
   .stalled .dot,
-  .offline .dot {
+  .offline .dot,
+  .paused .dot {
     background: rgb(var(--state-warn-fg));
   }
 

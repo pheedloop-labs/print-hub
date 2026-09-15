@@ -1,5 +1,10 @@
 <script>
-  let { hub } = $props()
+  import { go } from '../lib/router.svelte.js'
+
+  let { hub, queue = null } = $props()
+
+  // Scoped to one printer when the route says so, otherwise everything.
+  let jobs = $derived(queue ? hub.jobs.filter((j) => j.queue === queue) : hub.jobs)
 
   /* Deliberately small vocabulary. None of these is "printed": nothing in
    * the print path can confirm a badge physically exists. */
@@ -22,21 +27,28 @@
 <section>
   <div class="head">
     <h2>Jobs</h2>
-    <p class="count">{hub.jobs.length} recorded</p>
+    <p class="count">
+      {jobs.length} recorded{#if queue} on {queue}{/if}
+    </p>
   </div>
 
-  {#if hub.jobs.length === 0}
+  {#if queue}
+    <button class="scope" onclick={() => go('jobs')}>× showing one printer, see all</button>
+  {/if}
+
+  {#if jobs.length === 0}
     <p class="empty">
       Nothing recorded yet. Send a test page from the Printers view and it will
       appear here.
     </p>
   {:else}
     <ol class="list">
-      {#each hub.jobs as job (job.job_id)}
+      {#each jobs as job (job.job_id)}
         <li class="job {job.state}">
           <div class="row">
             <span class="state">{LABELS[job.state] ?? job.state}</span>
-            <span class="target">{job.label ?? job.queue}</span>
+            <button class="target" onclick={() => go('printers', job.queue)}
+              >{job.label ?? job.queue}</button>
             <span class="time mono">{when(job.last_seen)}</span>
           </div>
           <p class="id mono">{job.job_id}</p>
@@ -135,7 +147,28 @@
   }
 
   .target {
+    font: inherit;
     color: rgb(var(--text-body));
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .target:hover {
+    color: rgb(var(--text-link));
+    text-decoration: underline;
+  }
+
+  .scope {
+    font: inherit;
+    font-size: var(--font-size-sm);
+    color: rgb(var(--text-link));
+    background: none;
+    border: none;
+    padding: 0;
+    margin-bottom: var(--sp-xs);
+    cursor: pointer;
   }
 
   .time {

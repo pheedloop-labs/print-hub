@@ -1,13 +1,23 @@
 <script>
   import { onMount } from 'svelte'
   import { HubState } from './lib/hub.svelte.js'
+  import { Router, go } from './lib/router.svelte.js'
   import Jobs from './routes/Jobs.svelte'
+  import Printer from './routes/Printer.svelte'
   import Printers from './routes/Printers.svelte'
+  import Queue from './routes/Queue.svelte'
 
   const hub = new HubState(2000)
-  let view = $state('printers')
+  const router = new Router()
 
   onMount(() => hub.start())
+
+  // Anything held in a spooler right now, across every queue. This is the
+  // number worth carrying in the nav: it is normally zero, so a non-zero one
+  // means something is waiting.
+  let inFlight = $derived(
+    hub.printers.reduce((n, p) => n + (p.jobs?.length ?? 0), 0)
+  )
 
   // The hub answering at all is separate from a printer being well. Both are
   // shown, and neither is allowed to imply the other.
@@ -60,21 +70,29 @@
   {/if}
 
   <nav>
-    <button class:on={view === 'printers'} onclick={() => (view = 'printers')}>
+    <button class:on={router.view === 'printers'} onclick={() => go('printers')}>
       Printers
       <span class="n">{hub.printers.length}</span>
     </button>
-    <button class:on={view === 'jobs'} onclick={() => (view = 'jobs')}>
+    <button class:on={router.view === 'queue'} onclick={() => go('queue')}>
+      Spooler
+      <span class="n">{inFlight}</span>
+    </button>
+    <button class:on={router.view === 'jobs'} onclick={() => go('jobs')}>
       Jobs
       <span class="n">{hub.jobs.length}</span>
     </button>
   </nav>
 
   <main>
-    {#if view === 'printers'}
-      <Printers {hub} />
+    {#if router.view === 'printers' && router.queue}
+      <Printer {hub} queue={router.queue} />
+    {:else if router.view === 'queue'}
+      <Queue {hub} />
+    {:else if router.view === 'jobs'}
+      <Jobs {hub} queue={router.queue} />
     {:else}
-      <Jobs {hub} />
+      <Printers {hub} />
     {/if}
   </main>
 </div>

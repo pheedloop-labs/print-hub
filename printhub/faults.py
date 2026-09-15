@@ -220,7 +220,17 @@ def read(queue, offline=None):
 
     # Decide a state. Order matters: the most specific evidence wins, and
     # "no fault reported" is never upgraded to "ready".
-    if offline:
+    paused = bool(status & 0x00000001)
+
+    if paused:
+        # Not a fault. Someone paused this queue, or a purge left it paused,
+        # and the fix is to resume it rather than to go and look at the
+        # printer. Ranked above everything else it can report because nothing
+        # will come out until it is cleared.
+        out["state"] = "paused"
+        out["detail"] = ("The queue is paused, so nothing will print until it "
+                         "is resumed. Jobs sent now will wait.")
+    elif offline:
         # First, because a printer that is not there explains everything else
         # about it, and every other source will insist it is healthy.
         out["state"] = "offline"
