@@ -1,7 +1,42 @@
 <script>
+  import { sendTestPage } from '../lib/api.js'
   import StatusPill from './StatusPill.svelte'
 
   let { printer } = $props()
+
+  let sending = $state(false)
+  let result = $state(null)
+
+  /* A test page is the only way to find out whether a printer is well: no
+   * fault is visible while a queue is idle. It also spends real media, so it
+   * confirms first and is never automatic. */
+  async function testPage() {
+    const warning =
+      printer.state === 'offline'
+        ? `${printer.name} is reported offline. Send a test page anyway? It will report success whether or not anything comes out.`
+        : `Send a calibration card to ${printer.name}? This uses real media.`
+    if (!window.confirm(warning)) return
+
+    sending = true
+    result = null
+    try {
+      const r = await sendTestPage(printer.queue)
+      result = {
+        ok: !r.clipped,
+        text: r.clipped
+          ? 'Sent, but the page does not fit the printable area'
+          : 'Sent to the spooler. Watch Jobs for what happened next.',
+      }
+    } catch (err) {
+      const problems = err.body?.problems
+      result = {
+        ok: false,
+        text: problems ? `${err.message}: ${problems.join('; ')}` : err.message,
+      }
+    } finally {
+      sending = false
+    }
+  }
 
   // Faults the driver named, plus whatever the job or pStatus carried. The
   // three sources disagree about where the truth lives, so show which one
@@ -94,6 +129,10 @@
     </ul>
   {/if}
 
+  {#if result}
+    <p class="result" class:bad={!result.ok}>{result.text}</p>
+  {/if}
+
   <footer>
     <span>{printer.driver ?? 'driver unknown'}</span>
     <span class="sep">·</span>
@@ -101,6 +140,11 @@
     {#if printer.jobs_queued > 0}
       <span class="sep">·</span>
       <span>{printer.jobs_queued} queued</span>
+    {/if}
+    {#if printer.configured}
+      <button class="test" onclick={testPage} disabled={sending}>
+        {sending ? 'Sending…' : 'Test page'}
+      </button>
     {/if}
   </footer>
 </article>
@@ -244,5 +288,45 @@
 
   .sep {
     opacity: 0.5;
+  }
+
+  .test {
+    margin-left: auto;
+    font: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-medium);
+    color: rgb(var(--text-primary));
+    background: rgb(var(--surface-contrast));
+    border: 1px solid rgb(var(--border-primary));
+    border-radius: var(--rounded-s);
+    padding: 3px var(--sp-xs);
+    cursor: pointer;
+  }
+
+  .test:hover:not(:disabled) {
+    background: rgb(var(--surface-primary-accent));
+  }
+
+  .test:disabled {
+    color: rgb(var(--text-disabled));
+    border-color: rgb(var(--border-neutral));
+    cursor: default;
+  }
+
+  .result {
+    margin: 0;
+    padding: var(--sp-xxs) var(--sp-xs);
+    border-radius: var(--rounded-s);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-sm);
+    color: rgb(var(--state-printing-fg));
+    background: rgb(var(--state-printing-bg));
+    border: 1px solid rgb(var(--state-printing-fg) / 0.3);
+  }
+
+  .result.bad {
+    color: rgb(var(--state-fault-fg));
+    background: rgb(var(--state-fault-bg));
+    border-color: rgb(var(--state-fault-fg) / 0.3);
   }
 </style>

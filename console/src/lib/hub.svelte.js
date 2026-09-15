@@ -1,4 +1,4 @@
-import { getState } from './api.js'
+import { getJobs, getState } from './api.js'
 
 /* Polls the hub and holds the last good reading.
  *
@@ -17,6 +17,7 @@ import { getState } from './api.js'
  */
 export class HubState {
   data = $state(null)
+  jobs = $state([])
   error = $state(null)
   loading = $state(true)
   lastOk = $state(null)
@@ -44,7 +45,11 @@ export class HubState {
 
   async refresh() {
     try {
-      this.data = await getState()
+      // Both in one tick. The job record is what the watcher saw at 0.5 s;
+      // this poll only has to be frequent enough to read comfortably.
+      const [state, jobs] = await Promise.all([getState(), getJobs()])
+      this.data = state
+      this.jobs = jobs.jobs
       this.lastOk = Date.now()
       this.error = null
     } catch (err) {

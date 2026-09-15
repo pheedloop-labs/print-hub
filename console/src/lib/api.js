@@ -5,18 +5,38 @@
  * same-origin. Nothing here needs to know which.
  */
 
-async function get(path) {
-  const res = await fetch(path, { headers: { Accept: 'application/json' } })
-  if (!res.ok) throw new Error(`${path} returned HTTP ${res.status}`)
-  return res.json()
+async function request(path, options = {}) {
+  const res = await fetch(path, {
+    headers: { Accept: 'application/json' },
+    ...options,
+  })
+  let body = null
+  try {
+    body = await res.json()
+  } catch {
+    body = null
+  }
+  if (!res.ok) {
+    const err = new Error(body?.error || `${path} returned HTTP ${res.status}`)
+    err.body = body
+    throw err
+  }
+  return body
 }
 
 /** Hub health plus one reading per printer. The console's main poll. */
 export function getState() {
-  return get('/api/state')
+  return request('/api/state')
 }
 
-/** Every queue the hub process can see, usable or not. */
-export function getPrinters() {
-  return get('/printers')
+/** The job record. Not the live queue — see printhub/journal.py. */
+export function getJobs(limit = 50) {
+  return request(`/api/jobs?limit=${limit}`)
+}
+
+/** Send a printer its own calibration card. Spends real media. */
+export function sendTestPage(queue) {
+  return request(`/api/test-page?queue=${encodeURIComponent(queue)}`, {
+    method: 'POST',
+  })
 }

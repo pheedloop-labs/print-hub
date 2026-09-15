@@ -68,6 +68,8 @@ Some of the specifics, all reproducible from the notes:
 | `printhub/devmode.py` | capture and replay a queue's DEVMODE, vendor-private bytes included |
 | `printhub/faults.py` | enumerate the queues, and read one honest state each from three disagreeing sources |
 | `printhub/fleet.py` | per-printer config for this box: which blob to pin, which card to send |
+| `printhub/journal.py` | the job record: per-day JSONL, durable dedupe, and never the word printed |
+| `printhub/watcher.py` | polls every queue at 0.5 s, the only thing fast enough to see a job |
 | `console/` | the hub console: Svelte + Vite, PheedLoop design tokens |
 | `tools/benchmark.py` | one objective row per queue, including the exact page size to author at |
 | `tools/caps.py` | a driver's paper forms, paperkind ids and resolved defaults |

@@ -1,9 +1,11 @@
 <script>
   import { onMount } from 'svelte'
   import { HubState } from './lib/hub.svelte.js'
+  import Jobs from './routes/Jobs.svelte'
   import Printers from './routes/Printers.svelte'
 
   const hub = new HubState(2000)
+  let view = $state('printers')
 
   onMount(() => hub.start())
 
@@ -57,8 +59,23 @@
     <p class="stale">Cannot reach the hub: {hub.error}</p>
   {/if}
 
+  <nav>
+    <button class:on={view === 'printers'} onclick={() => (view = 'printers')}>
+      Printers
+      <span class="n">{hub.printers.length}</span>
+    </button>
+    <button class:on={view === 'jobs'} onclick={() => (view = 'jobs')}>
+      Jobs
+      <span class="n">{hub.jobs.length}</span>
+    </button>
+  </nav>
+
   <main>
-    <Printers {hub} />
+    {#if view === 'printers'}
+      <Printers {hub} />
+    {:else}
+      <Jobs {hub} />
+    {/if}
   </main>
 </div>
 
@@ -156,6 +173,51 @@
     max-width: 1100px;
     margin: 0 auto;
     padding: var(--sp-m) var(--sp-s) var(--sp-xl);
+  }
+
+  nav {
+    display: flex;
+    gap: var(--sp-xxs);
+    margin-bottom: var(--sp-m);
+  }
+
+  nav button {
+    font: inherit;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-medium);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-xxs);
+    padding: 6px var(--sp-s);
+    border-radius: 999px;
+    border: 1px solid rgb(var(--border-neutral-light));
+    background: rgb(var(--surface-contrast));
+    color: rgb(var(--text-caption));
+    cursor: pointer;
+  }
+
+  nav button:hover:not(.on) {
+    color: rgb(var(--text-body));
+    border-color: rgb(var(--border-neutral));
+  }
+
+  nav button.on {
+    background: rgb(var(--surface-primary));
+    border-color: rgb(var(--surface-primary));
+    color: rgb(var(--text-invert));
+  }
+
+  nav .n {
+    font-size: var(--font-size-xs);
+    padding: 0 6px;
+    border-radius: 999px;
+    background: rgb(var(--surface-muted));
+    color: rgb(var(--text-caption));
+  }
+
+  nav button.on .n {
+    background: rgb(var(--white) / 0.25);
+    color: rgb(var(--text-invert));
   }
 
   .stale {

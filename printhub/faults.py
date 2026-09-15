@@ -158,6 +158,7 @@ def read(queue, offline=None):
         "job_faults": [],
         "pstatus": None,
         "jobs_queued": 0,
+        "jobs": [],
         "offline": offline,
         "detail": None,
         "driver": None,
@@ -206,6 +207,15 @@ def read(queue, offline=None):
         ptext = (job.get("pStatus") or "").strip()
         if ptext and not out["pstatus"]:
             out["pstatus"] = ptext
+        # The watcher needs the document name to link a spooler job back to
+        # the job_id the client generated: print_pdf names it "hub <job_id>".
+        out["jobs"].append({
+            "id": job.get("JobId"),
+            "document": job.get("pDocument"),
+            "status": js,
+            "status_names": _decode(js, [(b, n) for b, n in JOB_BITS]),
+            "pstatus": ptext or None,
+        })
     out["job_faults"] = _decode(job_status, [(b, n) for b, n in JOB_BITS])
 
     # Decide a state. Order matters: the most specific evidence wins, and

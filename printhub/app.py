@@ -32,7 +32,7 @@ import uuid
 import win32print
 from flask import Flask, jsonify, request, send_from_directory
 
-from . import faults, fleet, render
+from . import faults, fleet, journal as journal_mod, render, watcher as watcher_mod
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 HUB_DIR = pathlib.Path(os.environ.get("HUB_DIR", ROOT))
@@ -69,8 +69,14 @@ SPOOL_DIR.mkdir(parents=True, exist_ok=True)
 # API routes below are more specific than the static catch-all and still win.
 app = Flask(__name__, static_folder="static", static_url_path="")
 
-# job_id -> state. In memory; making it durable with a 24 h window is task 2.
-seen = {}
+# The job record, and the only thing that polls fast enough to feed it. The
+# spooler shows a job for about 1.4 s, so the watcher runs at 0.5 s and
+# everything else reads what it saw. Dedupe lives here too and is now durable
+# across a restart, which design rule 1 needs and an in-memory dict never
+# gave: the service recycles on every code change.
+JOURNAL = journal_mod.Journal(HUB_DIR)
+WATCHER = watcher_mod.Watcher(JOURNAL)
+WATCHER.start()
 
 
 def _config():
@@ -129,7 +135,7 @@ def health():
         # Printed size is only trustworthy when a blob pins it.
         scale_pinned=DEVMODE is not None,
         hub_dir=str(HUB_DIR),
-        jobs_seen=len(seen),
+        jobs_seen=JOURNAL.count(),
         configured=sorted(_config().keys()) or None,
         config_error=fleet.load(HUB_DIR)[1],
     )
@@ -167,8 +173,12 @@ def do_print():
 
     job_id = request.args.get("job_id") or str(uuid.uuid4())
 
-    if job_id in seen:
-        return jsonify(job_id=job_id, state=seen[job_id], deduped=True)
+    prior = JOURNAL.seen(job_id)
+    if prior:
+        # Redelivery is normal, not exceptional (design rule 1), and this now
+        # survives a restart, which the old in-memory log did not.
+        return jsonify(job_id=job_id, state=prior["state"], deduped=True,
+                       first_seen=prior["first_seen"])
 
     if "pdf" not in request.files:
         return jsonify(error="POST a PDF as the form field 'pdf'"), 400
@@ -179,6 +189,13 @@ def do_print():
     if DEVMODE_ERROR:
         return jsonify(error=f"HUB_DEVMODE unreadable: {DEVMODE_ERROR}"), 500
 
+    # Recorded before the render, not after: a crash in PDFium would
+    # otherwise leave no trace of a job the hub had already taken.
+    JOURNAL.record("accepted", job_id=job_id, queue=QUEUE,
+                   label=_config().get(QUEUE, {}).get("label"),
+                   source=request.remote_addr,
+                   detail="Accepted over HTTP")
+
     try:
         geo, pages = render.print_pdf(
             str(path), QUEUE, doc_name=f"hub {job_id}", devmode=DEVMODE)
@@ -186,14 +203,25 @@ def do_print():
         # PDFium renders in-process here, so this is the only thing between a
         # bad PDF and the agent. /demo already renders in a child process;
         # bringing that to this route is later-task 1.
-        seen[job_id] = "failed"
+        JOURNAL.record("failed", job_id=job_id, queue=QUEUE,
+                       detail=f"{type(exc).__name__}: {exc}")
         return jsonify(
             job_id=job_id,
             state="failed",
             error=f"{type(exc).__name__}: {exc}",
         ), 500
 
-    seen[job_id] = "sent"
+    # "sent", never "printed". The watcher may add spooled/cleared on top,
+    # but it polls at 0.5 s and a fast printer can beat it, so this is the
+    # event that always happens. None of it implies a badge exists.
+    JOURNAL.record(
+        "sent", job_id=job_id, queue=QUEUE,
+        detail=f"Renderer finished, {len(pages)} page(s) handed to the spooler",
+        geometry={"dpi": geo["dpi_x"],
+                  "raster_mm": [round(v, 2) for v in pages[0]["raster_mm"]],
+                  "clipped": any(p["clipped"] for p in pages),
+                  "scale_pinned": DEVMODE is not None},
+    )
     return jsonify(
         job_id=job_id,
         state="sent",
@@ -284,7 +312,9 @@ def demo():
 
     wall = time.perf_counter() - t0
     sent = sum(1 for r in results if r["state"] == "sent")
-    seen[f"demo-{batch}"] = "sent" if sent == len(results) else "partial"
+    JOURNAL.record("accepted", job_id=f"demo-{batch}", queue="(fan-out)",
+                   label="demo", source=request.remote_addr,
+                   detail=f"{sent} of {len(results)} printers accepted")
     return jsonify(
         batch=batch,
         state=("dry_run" if dry else
@@ -311,24 +341,34 @@ def api_state():
     """
     config, config_error = fleet.load(HUB_DIR)
 
+    # Read the watcher's last snapshot rather than polling the spooler again.
+    # It is at most half a second old, it is the same reading that fed the job
+    # record, and it means the console and the record can never disagree.
+    snap = WATCHER.snapshot()
+    if snap is None:
+        readings = [faults.read(q["queue"], offline=q["offline"])
+                    for q in faults.enumerate_queues()]
+        polled_at = time.time()
+    else:
+        readings = snap["printers"]
+        polled_at = snap["at"]
+
     printers = []
-    for q in faults.enumerate_queues():
-        # Offline comes from the same enumeration, so it costs nothing extra.
-        reading = faults.read(q["queue"], offline=q["offline"])
-        entry = config.get(q["queue"], {})
+    for reading in readings:
+        # Copy: the snapshot belongs to the watcher and is shared between
+        # requests. Updating it in place would leak this request's config
+        # into the next one's reading.
+        row = dict(reading)
+        entry = config.get(row["queue"], {})
         resolved, problems = fleet.resolve(HUB_DIR, entry)
-        reading.update(
-            name=entry.get("label") or q["queue"],
+        row.update(
+            name=entry.get("label") or row["queue"],
             note=entry.get("note"),
             configured=bool(entry),
             pinned=bool(resolved.get("devmode")) and not problems,
-            dialog_port=q["dialog_port"],
-            duplicate_port=q["duplicate_port"],
-            shared=q["shared"],
-            network=q["network"],
             config_problems=problems,
         )
-        printers.append(reading)
+        printers.append(row)
 
     return jsonify(
         hub={
@@ -338,12 +378,101 @@ def api_state():
                                if DEVMODE else None),
             "devmode_error": DEVMODE_ERROR,
             "renderer": "pdfium",
-            "jobs_seen": len(seen),
+            "jobs_seen": JOURNAL.count(),
             "config_error": config_error,
             "configured": sum(1 for p in printers if p["configured"]),
         },
         printers=printers,
-        polled_at=time.time(),
+        polled_at=polled_at,
+        watching=snap is not None,
+    )
+
+
+@app.get("/api/jobs")
+def api_jobs():
+    """The job record: what the hub was asked to print and what followed.
+
+    Not the live queue. A job is in the spooler for about 1.4 s, so the queue
+    empties faster than anyone can look at it. These are the watcher's
+    observations, kept per day and reloaded on start.
+
+    No entry here ever says printed. `cleared` means the job left the
+    spooler, which happens whether or not media emerged.
+    """
+    limit = min(int(request.args.get("limit", 50)), 200)
+    return jsonify(jobs=JOURNAL.recent(limit), total=JOURNAL.count())
+
+
+@app.post("/api/test-page")
+def api_test_page():
+    """Send a printer its own calibration card.
+
+    This is the only way to see whether a printer is well: no fault is
+    visible while a queue is idle, so the honest test is to send something
+    and watch (Verified 29). It spends real media, which is why it is an
+    explicit action rather than anything automatic.
+
+    Refuses rather than guesses. A card authored for another device is
+    clipped or rescaled and neither is visible by eye, and an unpinned job
+    inherits whatever the driver UI was last set to.
+    """
+    queue = request.args.get("queue") or ""
+    config, config_error = fleet.load(HUB_DIR)
+    if config_error:
+        return jsonify(error=f"{fleet.CONFIG_NAME} unreadable: {config_error}"), 500
+
+    entry = config.get(queue)
+    if not entry:
+        return jsonify(error=f"{queue!r} is not configured on this hub"), 400
+
+    resolved, problems = fleet.resolve(HUB_DIR, entry)
+    if not resolved.get("card"):
+        problems.append("no test card configured")
+    if not resolved.get("devmode"):
+        problems.append("no DEVMODE blob configured, so the size would not be trustworthy")
+    if problems:
+        return jsonify(error="refusing to print", problems=problems), 400
+
+    job_id = f"test-{uuid.uuid4().hex[:8]}"
+    JOURNAL.record("accepted", job_id=job_id, queue=queue,
+                   label=entry.get("label"), source=request.remote_addr,
+                   detail="Test page requested from the console")
+
+    # Child process, like /demo: PDFium is not safe to drive concurrently
+    # in-process and a bad render would take the agent down with it.
+    cmd = [str(CHILD_PYTHON), "-m", "printhub.render",
+           queue, resolved["card"], "--devmode", resolved["devmode"],
+           "--name", f"hub {job_id}"]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=120,
+                           cwd=str(ROOT))
+    except subprocess.TimeoutExpired:
+        JOURNAL.record("failed", job_id=job_id, queue=queue,
+                       detail="Renderer timed out after 120 s")
+        return jsonify(job_id=job_id, state="failed",
+                       error="timed out after 120 s"), 500
+
+    if p.returncode != 0:
+        JOURNAL.record("failed", job_id=job_id, queue=queue,
+                       detail=(p.stderr.strip()[:300] or "renderer failed"))
+        return jsonify(job_id=job_id, state="failed",
+                       error=p.stderr.strip()[:300]), 500
+
+    clipped = "clipped=True" in p.stdout
+    JOURNAL.record(
+        "sent", job_id=job_id, queue=queue,
+        detail=("Renderer finished, but the page does not fit the printable area"
+                if clipped else "Renderer finished, handed to the spooler"),
+        geometry={"clipped": clipped, "scale_pinned": True},
+    )
+    return jsonify(
+        job_id=job_id,
+        state="sent",
+        queue=queue,
+        clipped=clipped,
+        # Same word as everywhere else. The watcher will say what the spooler
+        # did with it, and none of that proves a badge exists.
+        note="sent to the spooler, which is not a promise that a badge exists",
     )
 
 

@@ -52,3 +52,6 @@ console/.vite/
 # card to send. Machine-local like the blobs it points at, so a fresh machine
 # starts with none and configures its own. See printhub/fleet.py.
 printers.local.json
+
+# The job record. Runtime output and machine-local, like spool/.
+journal/

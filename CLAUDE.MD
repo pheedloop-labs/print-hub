@@ -64,7 +64,9 @@ win32print` fails, run it again from an admin shell.
 
 `HUB-PDF` is a second queue on the Microsoft PDF driver, bound to a file
 port instead of `PORTPROMPT:`. A file port writes straight to disk and opens
-no dialog. Use it for every test that does not need real media.
+no dialog. Use it for every test that does not need real media **when you
+are running as a user**. It faults under the LocalSystem service and writes
+nothing, so it proves nothing about the shipped agent. See Verified 60.
 
 ## The media
 
@@ -135,6 +137,8 @@ C:/hub/
     devmode.py        capture and replay a DEVMODE, vendor bytes included
     faults.py         enumerate the queues, and read one honest state each
     fleet.py          per-printer config: which blob to pin, which card
+    journal.py        the job record. Per-day JSONL, survives a restart
+    watcher.py        polls every queue at 0.5 s. The only thing fast enough
     static/           the BUILT console. Committed, see below
   console/            the console's Svelte source. Node, dev machine only
   tools/              spike instruments, not runtime
@@ -145,6 +149,7 @@ C:/hub/
   cards/              calibration cards, one per printer in the fleet
   docs/               the bench record, the memo, the raw fault timelines
   devmode/            captured blobs. Restore points, not source. Gitignored
+  journal/            the job record, one JSONL per day. Gitignored
   spool/              saved job PDFs. Safe to delete. Gitignored
   out.pdf             output of the HUB-PDF queue. Overwritten. Gitignored
 ```
@@ -1190,6 +1195,57 @@ started, and it answers with the old code.
     a port are flagged as a pair**, which is the only cheap signal for the
     orphan Epson: enumerable, identical in every public field, and not
     usable.
+
+60. **The `HUB-PDF` file port works as a user and faults as LocalSystem.**
+    Found by sending the same test page twice, same card, same blob, same
+    queue, differing only in who printed:
+
+    | printed by | renderer said | `out.pdf` | job |
+    |---|---|---|---|
+    | the logged-in user, in process | `PRINTED` | written | cleared in ~2 s |
+    | the LocalSystem service | `sent` | **untouched** | stuck `ERROR\|PRINTING\|RETAINED` |
+
+    Reproduced twice, and the stuck job would not clear with
+    `Remove-PrintJob`. It took `SetPrinter` `PRINTER_CONTROL_PURGE`, which
+    also left the queue **paused**, so it needed a `RESUME` after.
+
+    **This contradicts standing advice in this file.** The print queues table
+    calls `HUB-PDF` the silent PDF target to "use for every test that does
+    not need real media". That holds at a console and not through the
+    service, which is the context the shipped agent actually runs in. Any
+    result obtained by printing to `HUB-PDF` as a user says nothing about
+    what the service would do.
+
+    Mechanism not established. A Local Port writing to a path is the obvious
+    suspect, and SYSTEM has no trouble with `C:\hub` otherwise, so do not
+    write down a cause without testing one.
+
+    **Useful despite being a defect.** It is a reproducible fault that costs
+    no media and touches no hardware, which makes it the only convenient way
+    to exercise the console's fault display, the job record and the
+    `ERROR|PRINTING|RETAINED` stuck-job shape. It is kept configured on this
+    box for exactly that.
+
+    Note the stuck-job shape matches the QL-800 in Verified 41: a job the
+    spooler will not release, blocking the queue behind it. Two unrelated
+    drivers, same signature.
+
+61. **The job record exists, and it sees what the console cannot.** A
+    watcher thread polls every queue at 0.5 s and appends to a per-day JSONL
+    journal; the console polls the watcher's snapshot at 2 s rather than the
+    spooler. Measured on a real job: `accepted` -> `spooled` -> `cleared`,
+    the whole thing inside about 3 seconds, which a 2 s browser poll would
+    have caught at most one frame of.
+
+    Two consequences beyond visibility. Dedupe is now durable, which design
+    rule 1 always wanted and an in-memory dict never gave, since the service
+    recycles on every code change. And `/api/state` got *cheaper*, 17 ms to
+    2 ms, because it reads the watcher's snapshot instead of re-polling
+    eight queues per request.
+
+    The vocabulary is constrained on purpose. The journal can say `accepted`,
+    `spooled`, `fault`, `cleared` and `failed`. It cannot say printed, and
+    `cleared` carries the text "this does not mean a badge exists".
 
 ## Closed task 1 — the card print failed because of the renderer
 
