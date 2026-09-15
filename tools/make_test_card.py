@@ -1,13 +1,15 @@
 """Generate a caliper-measurable test card for the print hub spike.
 
-    make-test-card.py                     -> 140.0 x 88.0, the ZC10L card
-    make-test-card.py 83.98 58.92 65 40   -> W H [h-target v-target]
+    tools/make_test_card.py                   -> 140.0 x 88.0, ZC10L card
+    tools/make_test_card.py 83.98 58.92 65 40 -> W H [h-target v-target]
+
+Writes into cards/.
 
 Print it with noscale, then measure the two targets with digital calipers.
 Any renderer that scales the page shows up as a wrong reading.
 
 Author the page at the *imageable* size the driver reports, not the form
-size. pdfium_print.py blits 1:1 centred inside HORZRES x VERTRES, so a page
+size. printhub.render blits 1:1 centred inside HORZRES x VERTRES, so a page
 authored larger than the imageable area is clipped or rescaled, and both
 failures are invisible by eye on a badge. Read the imageable size from
 GetDeviceCaps HORZRES/VERTRES divided by LOGPIXELSX, because a driver with
@@ -28,6 +30,7 @@ fit, the ladders lose rows in a fixed order rather than overlapping, and the
 script says what it dropped.
 """
 
+import pathlib
 import sys
 
 from reportlab.lib.units import mm
@@ -115,7 +118,9 @@ if VT < 15:
     sys.exit(f"page {W:g} x {H:g} mm is too short to measure: vertical target "
              f"came out {VT:g} mm, need 15 mm minimum.")
 
-OUT = f"test-card-{W:g}x{H:g}.pdf"
+CARDS = pathlib.Path(__file__).resolve().parent.parent / "cards"
+CARDS.mkdir(exist_ok=True)
+OUT = str(CARDS / f"test-card-{W:g}x{H:g}.pdf")
 c = canvas.Canvas(OUT, pagesize=(W * mm, H * mm))
 c.setTitle(f"PheedLoop Print Hub test card {W:g}x{H:g}mm")
 

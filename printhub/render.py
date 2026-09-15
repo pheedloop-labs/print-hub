@@ -1,23 +1,17 @@
-"""Render a PDF with PDFium and send it to a Windows print queue over GDI.
+"""Render a PDF with PDFium and blit it 1:1 to a Windows print queue over GDI.
 
-Why this exists: SumatraPDF 3.6.1 cannot open the HUB-CARD queue at all. It
-fails with "Printer with given name doesn't exist" for every settings string
-and every flag combination, while the same Win32/GDI path succeeds and the
-same PDF prints correctly by hand. PDFium is also BSD-licensed, which is what
-the product should ship anyway.
+Scale is exact by construction: the page is rendered at the device's own dpi
+and blitted unscaled, so `noscale` is enforced rather than requested.
 
-Scale is exact by construction. The page is rendered at the device's own dpi
-and blitted 1:1, so no scaling happens anywhere: no driver "fit to page", no
-renderer shrink. That is the `noscale` guarantee, enforced rather than
-requested.
-
-The DC is created from the queue's own default DEVMODE, so whatever was
-configured by hand in the vendor driver UI is inherited, including the
-driver-private bytes. That is the same design Open task 2 wants.
+Pass a captured DEVMODE per job. The queue default cannot be trusted to hold
+(CLAUDE.MD Verified 19, 20) and an unpinned job has silently produced a 5%
+oversized card, an uncut badge, and a page cropped to 306 of 696 rows
+(Verified 18, 43, 47, 56).
 
 Opens no dialog. Spawns no subprocess.
 
-    pdfium_print.py <queue> <pdf> [--dry-run] [--no-center] [--name NAME]
+    python -m printhub.render <queue> <pdf> [--dry-run] [--no-center]
+                              [--name NAME] [--devmode BLOB]
 """
 
 import ctypes
@@ -93,14 +87,7 @@ gdi32.StretchDIBits.argtypes = [
 
 
 def load_devmode(devmode):
-    """Accept raw bytes or a path, and sanity check the blob.
-
-    Passing a DEVMODE per job is not a nicety on this hardware. The ZC10L
-    driver re-asserts its own stored settings over anything written into the
-    queue default with SetPrinter, within about ten seconds, so the queue
-    default cannot be trusted to hold. A DEVMODE handed straight to CreateDC
-    wins and cannot be raced.
-    """
+    """Accept raw bytes or a path, and sanity check the blob."""
     if devmode is None:
         return None
     blob = devmode if isinstance(devmode, (bytes, bytearray)) else \
@@ -149,13 +136,8 @@ def print_pdf(pdf_path, queue, center=True, doc_name=None, dry_run=False,
               devmode=None):
     """Render every page at device dpi and blit it 1:1 to the queue.
 
-    Returns a list of per-page geometry dicts. With dry_run, computes and
-    returns the same geometry without creating a print job.
-
-    devmode takes raw bytes or a path to a captured blob. Pass one whenever
-    the printed size has to be trustworthy: the exact-scale guarantee here is
-    only as honest as the dpi the driver reports, and a vendor setting can
-    make that dishonest. See load_devmode.
+    Returns (geometry, per-page records). dry_run computes the same geometry
+    without creating a job. devmode takes raw bytes or a path to a blob.
     """
     loaded = load_devmode(devmode)
     if loaded:
@@ -251,8 +233,7 @@ def main():
                     help="place at the printable origin instead of centred")
     ap.add_argument("--name", default=None, help="spooler document name")
     ap.add_argument("--devmode", default=None,
-                    help="captured DEVMODE blob to apply to this job. Use "
-                         "one when the printed size must be trustworthy")
+                    help="captured DEVMODE blob to pin to this job")
     a = ap.parse_args()
 
     geo, pages = print_pdf(a.pdf, a.queue, center=not a.no_center,

@@ -1,17 +1,17 @@
 """Collect one benchmark row per print queue, for comparing printers.
 
 Written when the spike turned into a printer bake-off. Every field here was
-previously gathered by hand from caps.py, a geometry probe and devmode.py,
+previously gathered by hand from caps.py, a geometry probe and devmode,
 three times over, and getting a new printer onto the comparison table should
 not cost that again.
 
 Objective fields only. Fault behaviour, recovery and dialog habits cannot be
 read from a driver, they have to be induced on hardware, so those live in
-printer-benchmark.html alongside these numbers.
+docs/printer-benchmark.html alongside these numbers.
 
-    benchmark.py            all local queues
-    benchmark.py "<queue>"  just one
-    benchmark.py --json     machine readable
+    tools/benchmark.py            all local queues
+    tools/benchmark.py "<queue>"  just one
+    tools/benchmark.py --json     machine readable
 
 Read only. Opens no dialog, spools nothing.
 """
@@ -19,13 +19,15 @@ Read only. Opens no dialog, spools nothing.
 import ctypes
 import json
 import math
+import pathlib
 import sys
 from ctypes import wintypes as wt
 
 import win32con
 import win32print
 
-import devmode as dm
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from printhub import devmode as dm
 
 g32 = ctypes.WinDLL("gdi32", use_last_error=True)
 g32.CreateDCW.argtypes = [wt.LPCWSTR, wt.LPCWSTR, wt.LPCWSTR, wt.LPVOID]
@@ -43,8 +45,8 @@ def author_size(px, dpi):
     """Largest mm, to 2 dp, whose PDFium raster is exactly px wide.
 
     PDFium rounds its raster up, so authoring at the exact imageable size
-    overshoots by a pixel and pdfium_print reports clipped=True. This is the
-    number to hand make-test-card.py.
+    overshoots by a pixel and printhub.render reports clipped=True. This
+    is the number to hand tools/make_test_card.py.
     """
     mm = px / dpi * 25.4
     for step in range(40):

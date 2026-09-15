@@ -51,24 +51,28 @@ Some of the specifics, all reproducible from the notes:
 - **[CLAUDE.MD](CLAUDE.MD)** is the real document: the working ledger, every
   verified finding with its evidence, the traps, and the negative results.
   Written for whoever picks this up next, including the mistakes.
-- **`printer-benchmark.html`** compares the five printers field by field, and
+- **`docs/printer-benchmark.html`** compares the five printers field by field, and
   carries the reproducible procedure for adding a sixth. Untested is marked as
   untested throughout rather than inferred.
-- **`spike-memo.html`** is the decision memo, written in Simplified Technical
+- **`docs/spike-memo.html`** is the decision memo, written in Simplified Technical
   English.
 
 ## The tools
 
 | file | purpose |
 |---|---|
-| `hub.py` | Flask rig. `/health`, `/printers`, `/print`, `/demo`, `/jobs`, `/queue` |
-| `pdfium_print.py` | the renderer: PDFium raster, GDI blit, exact scale by construction |
-| `devmode.py` | capture and replay a queue's DEVMODE, vendor-private bytes included |
-| `benchmark.py` | one objective row per queue, including the exact page size to author at |
-| `caps.py` | a driver's paper forms, paperkind ids and resolved defaults |
-| `make-test-card.py` | caliper-measurable calibration cards at any page size |
-| `spike4_monitor.py` | poll a queue and log every state change, with timing |
-| `stress_all.py` | print to every printer at once and time the spooler |
+| `hub.ps1` | task runner: install, start/stop/restart, status, demo, capture |
+| `hub.py` | entry point. The service runs `waitress-serve hub:app` |
+| `printhub/app.py` | Flask rig. `/health`, `/printers`, `/print`, `/demo`, `/jobs`, `/queue` |
+| `printhub/render.py` | the renderer: PDFium raster, GDI blit, exact scale by construction |
+| `printhub/devmode.py` | capture and replay a queue's DEVMODE, vendor-private bytes included |
+| `printers.json` | the fleet: queue, card, caliper targets and blob, which travel together |
+| `tools/benchmark.py` | one objective row per queue, including the exact page size to author at |
+| `tools/caps.py` | a driver's paper forms, paperkind ids and resolved defaults |
+| `tools/make_test_card.py` | caliper-measurable calibration cards at any page size |
+| `tools/spike4_monitor.py` | poll a queue and log every state change, with timing |
+| `cards/` | one calibration card per printer, authored to its imageable area |
+| `docs/` | the bench record, the decision memo, the raw fault timelines |
 
 Windows only, and specific to these five printers. `pywin32`, `pypdfium2`,
 `reportlab`, `flask`, `waitress`.

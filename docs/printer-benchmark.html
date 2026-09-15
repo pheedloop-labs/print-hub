@@ -188,7 +188,7 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
 </div>
 
 <h2><span class="num">02</span>What the drivers report</h2>
-<p class="sub">Collected by <span class="m">benchmark.py</span>. Read only, no media, no dialogs, so every figure here is free to reproduce.</p>
+<p class="sub">Collected by <span class="m">tools/benchmark.py</span>. Read only, no media, no dialogs, so every figure here is free to reproduce.</p>
 <div class="scroll">
 <table>
   <caption>Objective fields: anything a driver will tell you without printing.</caption>
@@ -484,19 +484,19 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
     trip through the dialog. The ZD621 wrote its private geometry immediately, so this is
     per-driver insurance rather than a universal step.</p></li>
   <li><strong>Read the objective fields</strong>
-    <pre>benchmark.py "&lt;queue&gt;"</pre>
+    <pre>tools/benchmark.py "&lt;queue&gt;"</pre>
     <p>Gives resolution, private-region size, the imageable area, whether full bleed is
     possible, and <span class="m">author_mm</span>, the page size whose PDFium raster lands
     exactly on the imageable pixel count.</p></li>
   <li><strong>Capture a restore point before touching anything</strong>
-    <pre>devmode.py capture "&lt;queue&gt;" devmode\&lt;name&gt;.devmode</pre></li>
+    <pre>python -m printhub.devmode capture "&lt;queue&gt;" devmode\&lt;name&gt;.devmode</pre></li>
   <li><strong>Build a calibration card at that exact size</strong>
-    <pre>make-test-card.py &lt;author_w&gt; &lt;author_h&gt; &lt;h-target&gt; &lt;v-target&gt;</pre>
+    <pre>tools/make_test_card.py &lt;author_w&gt; &lt;author_h&gt; &lt;h-target&gt; &lt;v-target&gt;</pre>
     <p>Targets shrink to fit and the layout zones itself. Prefer the longest axis for the
     vertical target: the Epson's 250 mm target is two and a half times more sensitive to a
     proportional error than the ZC10L's 100 mm.</p></li>
   <li><strong>Dry-run before spending media</strong>
-    <pre>pdfium_print.py "&lt;queue&gt;" &lt;card.pdf&gt; --devmode &lt;blob&gt; --dry-run</pre>
+    <pre>python -m printhub.render "&lt;queue&gt;" &lt;card.pdf&gt; --devmode &lt;blob&gt; --dry-run</pre>
     <p>Require <span class="m">clipped=False</span> and a scale error under 0.02 mm. This step
     also verifies the blob resolves to sane geometry, which is the check that made a stale
     Epson blob safe to pin.</p></li>
@@ -504,13 +504,13 @@ footer{border-top:1px solid var(--rule);margin-top:56px;padding-top:18px;
     <p>Calipers on both targets. No amount of correct-looking JSON substitutes: the rig
     reported perfect geometry for a printer that was physically unplugged.</p></li>
   <li><strong>Break it on purpose, with the monitor running</strong>
-    <pre>spike4_monitor.py "&lt;queue&gt;" --interval 0.5</pre>
+    <pre>tools/spike4_monitor.py "&lt;queue&gt;" --interval 0.5</pre>
     <p>Test each fault twice, idle and with a job in flight, because most drivers say nothing
     until a job arrives. Induce media-out, cover-open and a USB pull. Watch for a driver
     dialog, because that alone disqualifies a printer from unattended use.</p></li>
   <li><strong>Prove a vendor setting replays</strong>
     <p>Change one vendor-only setting by hand, capture a second blob,
-    <span class="m">devmode.py diff</span> them, then print with each pinned against the
+    <span class="m">printhub.devmode diff</span> them, then print with each pinned against the
     other's queue default. Pick a setting whose failure is visible without instruments: an
     uncut badge beats a 5% oversized card for showing a team.</p></li>
 </ol>
@@ -543,7 +543,7 @@ fix.</p>
 
 <footer>
   Measured on PHEEDLOOP-LABS. The objective columns reproduce with
-  <span class="m">benchmark.py</span>; the behavioural columns were induced on hardware and are
+  <span class="m">tools/benchmark.py</span>; the behavioural columns were induced on hardware and are
   recorded in <span class="m">CLAUDE.md</span>, <span class="m">spike4-timeline.txt</span> and
   <span class="m">spike5-brother-timeline.txt</span>. Untested is marked as untested
   throughout, never inferred.

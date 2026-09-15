@@ -1,19 +1,19 @@
 """Capture and replay a printer's full DEVMODE, driver-private bytes included.
 
-Spike 2. Vendor-specific driver settings live in the dmDriverExtra bytes that
-follow the public DEVMODE structure. No portable API reaches them and pywin32
-hands you a DEVMODE object rather than raw bytes, so this is a small ctypes
-layer over DocumentProperties and SetPrinter.
+Vendor settings live in the dmDriverExtra bytes after the public DEVMODE.
+No portable API reaches them and pywin32 hands you a DEVMODE object rather
+than raw bytes, so this is a small ctypes layer over DocumentProperties and
+SetPrinter.
 
-The design: write the captured blob into the queue's own default settings with
-SetPrinter level 2. Every renderer then inherits it, so capture and replay is
-one problem instead of one problem per renderer. pdfium_print.py already
-builds its DC with a NULL DEVMODE, so it picks this up for free.
+Capture is the useful half. `apply` writes the queue default, which the ZC10L
+re-asserts within ten seconds (CLAUDE.MD Verified 19) — delivery is per job,
+via render.py's --devmode, not through the queue. Keep apply for capture-side
+experiments and restores.
 
-    devmode.py show    <queue>
-    devmode.py capture <queue> <file>
-    devmode.py apply   <queue> <file>
-    devmode.py diff    <file-a> <file-b>
+    python -m printhub.devmode show    <queue>
+    python -m printhub.devmode capture <queue> <file>
+    python -m printhub.devmode apply   <queue> <file>
+    python -m printhub.devmode diff    <file-a> <file-b>
 
 apply changes the queue for every user and needs manage-printer rights.
 Capture a restore point before you ever call it.
@@ -261,7 +261,7 @@ def main():
             print("  => queue default now matches the blob exactly")
         else:
             print("  => MISMATCH. The driver rewrote or rejected part of it.")
-            print("     Compare with: devmode.py diff <wanted> <after-file>")
+            print("     Compare with: devmode diff <wanted> <after-file>")
 
     elif cmd == "diff" and len(sys.argv) == 4:
         with open(sys.argv[2], "rb") as f:

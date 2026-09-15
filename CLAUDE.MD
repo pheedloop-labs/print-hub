@@ -78,7 +78,7 @@ actually prints correctly. Verified with calipers on a physical card: the
 Earlier revisions of this file said the media was 139.7 x 88.9 mm and put
 the long axis first, then told you to trust that over the spike artifact.
 Both the number and the axis order were wrong. Do not "correct"
-`make-test-card.py` back to 139.7 x 88.9.
+`make_test_card.py` back to 139.7 x 88.9.
 
 The driver reports one form, named `140x88mm`, and the name understates it:
 it measures 89.0 x 142.2 mm portrait. The queue's DEVMODE sets
@@ -123,30 +123,47 @@ captured blob rather than by any portable field.
 
 ## Files
 
-| File | Purpose |
-|---|---|
-| `hub.py` | the rig. Flask, five routes |
-| `pdfium_print.py` | the renderer. PDFium raster, GDI blit, exact scale |
-| `devmode.py` | capture and replay a queue's DEVMODE, vendor bytes included |
-| `devmode\` | captured blobs. Restore points, not source. Gitignored |
-| `caps.py` | dumps a driver's paper names, paperkind ids, and DEVMODE defaults |
-| `spike4_monitor.py` | polls a queue and logs every state change, with timing |
-| `benchmark.py` | one objective row per queue. `author_mm` is the useful field |
-| `stress_all.py` | prints to every printer at once and times the spooler |
-| `printer-benchmark.html` | the bench record, five printers compared |
-| `spike4-timeline.txt` | raw spike 4 timeline. Evidence for the memo |
-| `make-test-card.py` | generates a calibration card at any page size |
-| `test-card-140x88.pdf` | calibration card for `HUB-CARD`, the ZC10L |
-| `test-card-83.98x58.92.pdf` | calibration card for the Brother QL-800 |
-| `spool\` | saved job PDFs. Safe to delete. Gitignored |
-| `out.pdf` | output of the `HUB-PDF` queue. Overwritten each print. Gitignored |
+```
+C:/hub/
+  hub.ps1             task runner. start/stop/status/demo/capture/...
+  hub.py              entry point. The service runs waitress-serve hub:app
+  requirements.txt    direct dependencies, pinned
+  printers.json       the fleet: queue + card + caliper targets + blob
+  printhub/           the rig
+    app.py            Flask, six routes
+    render.py         PDFium raster, GDI blit, exact scale by construction
+    devmode.py        capture and replay a DEVMODE, vendor bytes included
+  tools/              spike instruments, not runtime
+    benchmark.py      one objective row per queue. author_mm is the field
+    caps.py           a driver's paper forms, paperkind ids, resolved default
+    make_test_card.py calibration cards at any page size, written to cards/
+    spike4_monitor.py polls a queue, logs every state change, with timing
+  cards/              calibration cards, one per printer in the fleet
+  docs/               the bench record, the memo, the raw fault timelines
+  devmode/            captured blobs. Restore points, not source. Gitignored
+  spool/              saved job PDFs. Safe to delete. Gitignored
+  out.pdf             output of the HUB-PDF queue. Overwritten. Gitignored
+```
 
-`make-test-card.py` now takes optional arguments, and earlier notes saying
-it takes none are out of date:
+The tools import the package, so run them from `C:\hub`. Absolute-path
+invocation works too: each inserts the repo root on `sys.path` itself.
+
+**Renamed in the restructure:** `pdfium_print.py` is now `printhub/render.py`
+and `make-test-card.py` is now `tools/make_test_card.py`. The Verified ledger
+below still calls the renderer `pdfium_print`, because those entries are dated
+evidence and were not rewritten. Read that name as `printhub.render`, and its
+command line as `python -m printhub.render`.
+
+`stress_all.py` is gone. It hardcoded a second copy of the fleet that
+`printers.json` already held, and `/demo?dry_run=1` does the same job
+reading the one source of truth. Verified 54 keeps its numbers.
+
+`make_test_card.py` takes optional arguments, and earlier notes saying it
+takes none are out of date:
 
 ```
-make-test-card.py                     -> 140.0 x 88.0, the ZC10L card
-make-test-card.py 83.98 58.92 70 40   -> W H [h-target v-target]
+tools\make_test_card.py                     -> 140.0 x 88.0, the ZC10L card
+tools\make_test_card.py 83.98 58.92 70 40   -> W H [h-target v-target]
 ```
 
 The layout derives every position from `W` and `H`, and the caliper targets
@@ -183,14 +200,25 @@ would mean editing DEVMODE, which is task 2 work.
 Routes: `/health`, `/printers`, `/print` (POST a PDF as form field `pdf`),
 `/jobs`, `/queue`.
 
-Start it:
+Start it with the task runner:
+
+```
+.\hub.ps1 dev        foreground, port 8080
+.\hub.ps1 start      the service
+.\hub.ps1 restart    after ANY code change
+.\hub.ps1 status     service, environment, health, queue
+.\hub.ps1            the full task list
+```
+
+By hand, if you prefer, and this is all `dev` does:
 
 ```
 $env:HUB_QUEUE = "HUB-PDF"
-C:\hub\.venv\Scripts\python.exe C:\hub\hub.py
+C:/hub/.venv/Scripts/python.exe C:/hub/hub.py
 ```
 
-Those two lines are all you need.
+Never activate the venv. Call the interpreter by absolute path, because the
+execution policy blocks `Activate.ps1` on this box.
 
 The process reads every variable once at start. Restart it after any change.
 Check `/health` and confirm `renderer` and `queue` read what you expect: a
@@ -1023,7 +1051,7 @@ started, and it answers with the old code.
     17.2-megapixel page is always the long pole.
 
     Nothing in the spooler serialised the work and no queue interfered with
-    another. `stress_all.py` runs it, with `--dry-run` to exercise the whole
+    another. `/demo?dry_run=1` runs it, exercising the whole
     concurrent path for free.
 
     Worth knowing for a venue: five badge stations firing in the same second
@@ -1253,6 +1281,9 @@ Restore points live in `devmode\`, gitignored:
 | `ZD621.factory.devmode` | ZD621 as installed, 104 x 76.2 mm. Untouched factory state |
 | `ZD621.88x76-mark.devmode` | ZD621, 88 x 76 mm mark-sensed, **tear-off.** Teaching artefact |
 | `ZD621.88x76-mark-cut.devmode` | ZD621, 88 x 76 mm mark-sensed, **cut ON.** Pin this one |
+| `DYMO550.factory.devmode` | DYMO 550 as installed, `30252 Address`. Untouched factory state |
+| `DYMO550.58x100.devmode` | DYMO 550, 58 x 100 mm. Captured against the third-party stock the printer then refused |
+| `DYMO550.30252-address.devmode` | DYMO 550, 30252 address label, genuine media. Pin this one |
 
 These are restore points on this box, not source, and they are gitignored.
 A fresh machine needs its own captures: the vendor bytes are opaque and
@@ -1276,7 +1307,9 @@ machine on the network produced a card. Spike 1's gate is met.
 | printing from another machine | works, `curl` to `192.168.1.30:8080` |
 | printing after reboot with no login | **works** |
 
-The sequence that got here, for rebuilding on the next box:
+The sequence that got here, for rebuilding on the next box.
+`.\hub.ps1 install-service` now does all of it, but the steps are kept
+because the order is the point:
 
 ```
 [Environment]::SetEnvironmentVariable("HUB_QUEUE",   "HUB-CARD", "Machine")
@@ -1336,7 +1369,7 @@ this week along with the transport, but it must not ship this way.
 
 **Done.** Four faults induced deliberately on real hardware, with
 `spike4_monitor.py` polling three independent sources twice a second. The raw
-timeline is in `spike4-timeline.txt`.
+timeline is in `docs/spike4-timeline.txt`.
 
 Two findings dominate, and neither was on the list of things this task set
 out to learn.

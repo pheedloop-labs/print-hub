@@ -6,45 +6,71 @@
     "clipped or rescaled, and an unpinned job inherits whatever the driver UI",
     "was last set to. See CLAUDE.MD, Verified 18, 43, 47 and 56.",
     "",
-    "Read by stress_all.py and by the hub's /demo route. Paths use forward",
-    "slashes on purpose; Windows accepts them and JSON does not have to escape",
-    "them."
+    "targets is [horizontal, vertical] in mm, the two caliper distances the",
+    "card carries. It is recorded because the filename encodes only the page",
+    "size: regenerating without it silently re-authored the Epson card with a",
+    "50 mm vertical target in place of its 250 mm one, which is the most",
+    "sensitive scale check in the spike (Verified 42).",
+    "",
+    "Read by the hub /demo route and by hub.ps1 cards. Paths are relative to",
+    "HUB_DIR and use forward slashes; Windows accepts them and JSON does not",
+    "have to escape them."
   ],
   "printers": [
     {
       "name": "zc10l",
       "queue": "HUB-CARD",
-      "card": "C:/hub/test-card-140x88.pdf",
-      "devmode": "C:/hub/devmode/HUB-CARD.restore.devmode",
+      "card": "cards/test-card-140x88.pdf",
+      "targets": [
+        100,
+        50
+      ],
+      "devmode": "devmode/HUB-CARD.restore.devmode",
       "note": "Zebra ZC10L card printer, 300 dpi, 140 x 88 mm PVC. Blob is zoom 100"
     },
     {
       "name": "ql800",
       "queue": "Brother QL-800",
-      "card": "C:/hub/test-card-83.98x58.92.pdf",
-      "devmode": "C:/hub/devmode/QL800.62mm-blackred.devmode",
+      "card": "cards/test-card-83.98x58.92.pdf",
+      "targets": [
+        55,
+        40
+      ],
+      "devmode": "devmode/QL800.62mm-blackred.devmode",
       "note": "Brother QL-800, 300 dpi, 62 mm continuous DK. Blob restores the 62 mm form"
     },
     {
       "name": "c4000u",
       "queue": "EPSON CW-C4000u (Copy 1)",
-      "card": "C:/hub/test-card-101.97x301.99.pdf",
-      "devmode": "C:/hub/devmode/C4000u.102x302-autocut.devmode",
+      "card": "cards/test-card-101.97x301.99.pdf",
+      "targets": [
+        75,
+        250
+      ],
+      "devmode": "devmode/C4000u.102x302-autocut.devmode",
       "note": "EPSON CW-C4000u, 600 dpi, 102 x 302 mm badge stock. Blob has auto-cut ON"
     },
     {
       "name": "zd621",
       "queue": "ZDesigner ZD621-203dpi ZPL",
-      "card": "C:/hub/test-card-87.96x76.19.pdf",
-      "devmode": "C:/hub/devmode/ZD621.88x76-mark-cut.devmode",
+      "card": "cards/test-card-87.96x76.19.pdf",
+      "targets": [
+        60,
+        55
+      ],
+      "devmode": "devmode/ZD621.88x76-mark-cut.devmode",
       "note": "Zebra ZD621, 203 dpi, 88 x 76 mm mark sensed. Blob has cut ON"
     },
     {
       "name": "dymo550",
       "queue": "DYMO LabelWriter 550 Turbo",
-      "card": "C:/hub/test-card-25.31x81.53.pdf",
-      "devmode": "C:/hub/devmode/DYMO550.30252-address.devmode",
-      "note": "DYMO 550 Turbo, 300 dpi, 30252 address label. Genuine media only"
+      "card": "cards/test-card-25.31x81.53.pdf",
+      "targets": [
+        100,
+        50
+      ],
+      "devmode": "devmode/DYMO550.30252-address.devmode",
+      "note": "DYMO 550 Turbo, 300 dpi, 30252 address label. Genuine media only. Narrow layout"
     }
   ]
 }

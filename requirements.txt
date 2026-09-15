@@ -1,0 +1,16 @@
+# Direct dependencies only. Pinned to what is on the box today.
+# Transitive packages (Jinja2, Werkzeug, numpy, pillow, ...) come along with
+# these and are deliberately not listed.
+#
+# pywin32 needs a post-install step that pip does not run:
+#     .venv\Scripts\python.exe .venv\Scripts\pywin32_postinstall.py -install
+# from an admin shell. `hub.ps1 install` does it for you. If `import
+# win32print` fails, that step is what is missing.
+
+Flask==3.1.3
+waitress==3.0.2
+pywin32==312
+pypdf==6.18.0
+qrcode==8.2
+reportlab==5.0.1
+pypdfium2==5.13.0

@@ -15,7 +15,7 @@ itself a finding:
 Prints a line only when something changes, so a quiet queue stays quiet and
 the timeline stays readable.
 
-    spike4_monitor.py [queue] [--interval 0.5]
+    tools/spike4_monitor.py [queue] [--interval 0.5]
 """
 
 import argparse
