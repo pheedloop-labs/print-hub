@@ -15,13 +15,17 @@
    * out - which is the failure mode this whole project keeps meeting.
    */
   async function send() {
-    let warning = `Send a calibration card to ${printer.name}? This uses real media.`
-    if (printer.state === 'offline') {
-      warning = `${printer.name} is reported offline. Send anyway? The hub will report success whether or not anything comes out.`
-    } else if (printer.state === 'paused') {
-      warning = `${printer.name} is paused, so the job will sit in the queue rather than print. Send anyway?`
+    // Confirm only when media is actually at risk. An offline printer will
+    // be refused by the hub, so there is nothing to warn about - clicking
+    // just surfaces the reason. A paused one holds the job rather than
+    // losing it, which is worth saying but is not a refusal.
+    if (printer.state !== 'offline') {
+      const warning =
+        printer.state === 'paused'
+          ? `${printer.name} is paused, so the job will wait in the queue rather than print now. Send it anyway?`
+          : `Send a calibration card to ${printer.name}? This uses real media.`
+      if (!window.confirm(warning)) return
     }
-    if (!window.confirm(warning)) return
 
     sending = true
     result = null

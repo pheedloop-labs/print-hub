@@ -94,6 +94,46 @@ def jsonable(value):
         return str(value)
 
 
+def offline_refusal(queue):
+    """Refuse a job to a printer Windows reports offline. None means proceed.
+
+    The spike's one reusable lesson about detection is that a check is only
+    worth having if it compares two sources that can disagree (Verified 57),
+    and its one consequence is that the agent should refuse what it can
+    detect. Offline became detectable for 2 ms (Verified 58), so this is the
+    second member of that family after `clipped`.
+
+    Without it the hub returns `sent`, with correct geometry, for a printer
+    that is switched off - which it has now done three separate times in this
+    project. One honest error beats a badge that does not exist.
+
+    Two limits worth stating rather than hiding. The flag takes about 20
+    seconds to appear, so a printer unplugged a moment ago still passes here;
+    this narrows the window, it does not close it. And `paused` is
+    deliberately NOT refused: a paused queue holds the job and prints it on
+    resume, so the job is delayed rather than lost.
+    """
+    for q in faults.enumerate_queues():
+        if q["queue"] != queue:
+            continue
+        if q["offline"]:
+            return jsonify(
+                state="refused",
+                reason="offline",
+                queue=queue,
+                error=(f"{queue} is reported offline, so this job would be "
+                       f"accepted and never printed. Check the printer is on "
+                       f"and connected, then send it again."),
+            ), 409
+        return None
+    return jsonify(
+        state="refused",
+        reason="unknown_queue",
+        queue=queue,
+        error=f"{queue} is not a print queue on this machine.",
+    ), 404
+
+
 def queue_error():
     """JSON error when HUB_QUEUE is not set. Fail loudly, never default."""
     if QUEUE:
@@ -179,6 +219,14 @@ def do_print():
         # survives a restart, which the old in-memory log did not.
         return jsonify(job_id=job_id, state=prior["state"], deduped=True,
                        first_seen=prior["first_seen"])
+
+    # Refuse before taking the file: a job we will not print is not accepted.
+    refusal = offline_refusal(QUEUE)
+    if refusal:
+        JOURNAL.record("refused", job_id=job_id, queue=QUEUE,
+                       source=request.remote_addr,
+                       detail=refusal[0].get_json()["error"])
+        return refusal
 
     if "pdf" not in request.files:
         return jsonify(error="POST a PDF as the form field 'pdf'"), 400
@@ -424,6 +472,10 @@ def api_test_page():
     entry = config.get(queue)
     if not entry:
         return jsonify(error=f"{queue!r} is not configured on this hub"), 400
+
+    refusal = offline_refusal(queue)
+    if refusal:
+        return refusal
 
     resolved, problems = fleet.resolve(HUB_DIR, entry)
     if not resolved.get("card"):

@@ -3,8 +3,9 @@ __pycache__/
 *.pyc
 .venv/
 
-# Local tool state, not shared
-.claude/settings.local.json
+# Local tool state, not shared. The glob also covers the .bak left when the
+# permission list was pruned: this file has no git history to fall back on.
+.claude/settings.local.json*
 
 # Renderer binaries. Provisioned on the box, never committed.
 # SumatraPDF is GPLv3 and is a spike accelerator only; PDFium arrives via

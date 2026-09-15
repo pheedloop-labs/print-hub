@@ -15,6 +15,9 @@
     cleared: 'Left the queue',
     fault: 'Fault',
     failed: 'Failed',
+    // The hub declined it, so nothing was printed and nothing was lost.
+    // Resending the same job_id is expected to work once the cause is fixed.
+    refused: 'Refused',
   }
 
   function when(iso) {
@@ -119,6 +122,12 @@
   .job.fault,
   .job.failed {
     border-left-color: rgb(var(--state-fault-fg));
+  }
+  .job.refused {
+    border-left-color: rgb(var(--state-warn-fg));
+  }
+  .job.refused .state {
+    color: rgb(var(--state-warn-fg));
   }
   .job.cleared {
     border-left-color: rgb(var(--border-neutral));

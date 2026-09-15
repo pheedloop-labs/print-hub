@@ -130,7 +130,9 @@ class Journal:
         # arrive out of order: the watcher may see a job in the queue before
         # the renderer has returned, so progress is ranked rather than
         # assigned by whichever event landed last.
-        if kind in ("failed", "fault"):
+        if kind == "refused":
+            job["state"] = "refused"
+        elif kind in ("failed", "fault"):
             job["state"] = kind if kind == "failed" else "fault"
             if kind == "fault":
                 job["fault"] = event.get("detail")
@@ -162,10 +164,19 @@ class Journal:
     # --- reading ----------------------------------------------------------
 
     def seen(self, job_id):
-        """Dedupe. Durable across a restart, unlike the old in-memory dict."""
+        """Dedupe. Durable across a restart, unlike the old in-memory dict.
+
+        A refused job does not count as seen. The hub declined it - because
+        the printer was reported offline, say - so nothing was printed and
+        resending the same job_id after plugging the printer back in must
+        work. Treating a refusal as a duplicate would turn one honest error
+        into a badge that can never be produced.
+        """
         with self._lock:
             job = self._jobs.get(job_id)
-            return dict(job) if job else None
+            if not job or job["state"] == "refused":
+                return None
+            return dict(job)
 
     def recent(self, limit=50):
         """Newest first, for the console."""
